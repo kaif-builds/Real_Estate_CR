@@ -1,98 +1,78 @@
 'use client'
 
 /**
- * Login Page — Module 1 & Part 1/2 Spec
- * Styled to match Desktop/CRM exact visual style:
- * - Clean light background (bg-slate-50)
- * - White card with subtle border & shadow (bg-white border-slate-200 shadow-sm sm:rounded-2xl)
- * - Blue brand logo badge (bg-blue-600 rounded-xl)
- * - Typography, inputs, and button matching Desktop/CRM's Login.tsx
- * - Email + Password authentication against seeded mock users
- * - Preserves mandatory live GPS geolocation requirement for Field Agents
- * - Preserves demo credentials helper with role badges and GPS indicator
+ * Login Page — Exact match of Desktop/CRM's Login.tsx
+ *
+ * 1. "Role Profile (Mock Auth)" section with 4 selectable buttons in a 2x2 grid:
+ *    Super Admin, Office Executive, Agent, Client with active selected state styling.
+ * 2. Email address and Password fields with standard icon styling.
+ * 3. "Remember me" checkbox + "Forgot password?" link.
+ * 4. Blue "Log In" button with loading spinner when verifying GPS.
+ * 5. Logo treatment: blue rounded-xl building icon, "RealEstateCRM" heading, "Sign in to your account" subtitle.
+ * 6. Clean light background (bg-slate-50) and white card (sm:rounded-2xl, border-slate-200, shadow-sm).
+ * 7. Mock auth login by selecting role profile directly, enforcing Agent geolocation check.
  */
 
 import React, { useState } from 'react'
-import {
-  Building2, Lock, Mail, AlertCircle, MapPin,
-  Navigation, Loader2, KeyRound
-} from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
-import { MOCK_USERS, type UserOption } from '@/lib/mockData'
+import { Building2, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+type Role = 'Super Admin' | 'Office Executive' | 'Agent' | 'Client'
+
+const roles: Role[] = ['Super Admin', 'Office Executive', 'Agent', 'Client']
+
+const ROLE_DEFAULT_EMAILS: Record<Role, string> = {
+  'Super Admin': 'aman@propdesk.in',
+  'Office Executive': 'neha@propdesk.in',
+  'Agent': 'ravi@propdesk.in',
+  'Client': 'vikram@propdesk.in',
+}
 
 export default function LoginPage() {
-  const { login, completeAgentLogin, requestLocationPermission } = useAuth()
+  const { loginAsRole } = useAuth()
+  const router = useRouter()
+  const [selectedRole, setSelectedRole] = useState<Role>('Super Admin')
+  const [email, setEmail] = useState('demo@propdesk.in')
+  const [password, setPassword] = useState('password123')
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [locationNotice, setLocationNotice] = useState<string | null>(null)
-  const [isVerifyingLocation, setIsVerifyingLocation] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // ── Form Submit ─────────────────────────────────────────────────────────────
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    setErrorMessage(null)
-    setLocationNotice(null)
-    setIsSubmitting(true)
+    setErrorMsg('')
 
-    try {
-      const result = await login(email, password)
-
-      // 1. Invalid credentials check
-      if (!result.success || !result.user) {
-        setErrorMessage(result.error || 'Invalid email or password')
-        setIsSubmitting(false)
+    if (selectedRole === 'Agent') {
+      if (typeof window === 'undefined' || !navigator.geolocation) {
+        setErrorMsg('Geolocation is not supported by your browser. Location access is required for Agents to log in.')
         return
       }
 
-      // 2. Non-agent users log in immediately (handled in auth context)
-      if (!result.isAgent) {
-        return
-      }
-
-      // 3. AGENT LOGIN: Mandatory Geolocation Permission Check
-      setIsVerifyingLocation(true)
-      setLocationNotice('Agent role detected. Requesting required live GPS location access…')
-
-      const locResult = await requestLocationPermission()
-
-      if (!locResult.granted) {
-        // Geolocation denied or blocked — strictly block login
-        setIsVerifyingLocation(false)
-        setIsSubmitting(false)
-        setLocationNotice(null)
-        setErrorMessage(
-          locResult.error ||
-            "Location access is blocked for this site. Click the location icon in your browser's address bar, choose 'Allow', then refresh this page."
-        )
-        return
-      }
-
-      // Location granted! Complete agent login and start continuous watchPosition
-      setLocationNotice('Location verified! Finalizing secure login…')
-      completeAgentLogin(result.user, locResult.position)
-    } catch (err) {
-      setErrorMessage('An unexpected error occurred during login. Please try again.')
-      setIsSubmitting(false)
-      setIsVerifyingLocation(false)
+      setIsLoading(true)
+      // One-time grab to confirm permission, then start continuous watching
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setIsLoading(false)
+          loginAsRole('Agent', {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          })
+        },
+        (error) => {
+          setIsLoading(false)
+          setErrorMsg('Location access is required for Agents to log in. Please enable location permissions and try again.')
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+    } else {
+      loginAsRole(selectedRole)
     }
-  }
-
-  // ── Helper to fill demo credentials ─────────────────────────────────────────
-
-  const handleFillDemo = (user: UserOption) => {
-    setEmail(user.email)
-    setPassword(user.password || 'Demo@123')
-    setErrorMessage(null)
-    setLocationNotice(null)
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
-      {/* Brand Header — Exact replica of Desktop/CRM */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
@@ -107,27 +87,43 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Main Login Card — Exact replica of Desktop/CRM */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow-sm sm:rounded-2xl sm:px-10 border border-slate-200">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* Error Message Banner */}
-            {errorMessage && (
+          <form className="space-y-6" onSubmit={handleLogin}>
+            {errorMsg && (
               <div className="bg-red-50 border border-red-200 rounded-md p-4 flex items-start text-sm text-red-800">
                 <AlertCircle className="w-5 h-5 text-red-500 mr-2 shrink-0 mt-0.5" />
-                <span className="leading-relaxed font-medium">{errorMessage}</span>
+                <span>{errorMsg}</span>
               </div>
             )}
 
-            {/* Location Notice Banner */}
-            {locationNotice && (
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 flex items-center text-sm text-blue-800">
-                <Navigation className="w-4 h-4 text-blue-600 mr-2 shrink-0 animate-spin" />
-                <span className="leading-relaxed font-medium">{locationNotice}</span>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Role Profile (Mock Auth)
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {roles.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole(r)
+                      setEmail(ROLE_DEFAULT_EMAILS[r] || 'demo@propdesk.in')
+                      setErrorMsg('')
+                    }}
+                    className={cn(
+                      'flex items-center justify-center px-3 py-2 border rounded-md text-xs font-semibold transition-colors',
+                      selectedRole === r
+                        ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    )}
+                  >
+                    {r}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-700">
                 Email address
@@ -143,14 +139,11 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  placeholder="e.g. aman@propdesk.in"
-                  className="block w-full pl-10 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 placeholder:text-slate-400 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full pl-10 border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900"
                 />
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700">
                 Password
@@ -166,14 +159,11 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="block w-full pl-10 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 placeholder:text-slate-400 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full pl-10 border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-slate-900"
                 />
               </div>
             </div>
 
-            {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
@@ -182,7 +172,7 @@ export default function LoginPage() {
                   type="checkbox"
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-700">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-900">
                   Remember me
                 </label>
               </div>
@@ -194,102 +184,23 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Submit Button */}
             <div>
               <button
                 type="submit"
-                disabled={isSubmitting || isVerifyingLocation}
+                disabled={isLoading}
                 className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isVerifyingLocation ? (
+                {isLoading ? (
                   <span className="flex items-center">
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Verifying GPS Location…
-                  </span>
-                ) : isSubmitting ? (
-                  <span className="flex items-center">
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Signing in…
+                    Locating...
                   </span>
                 ) : (
-                  "Log In"
+                  'Log In'
                 )}
               </button>
             </div>
           </form>
-        </div>
-
-        {/* ── Demo Credentials Helper Box (Light Theme matching overall app) ── */}
-        <div className="mt-6 bg-white py-6 px-4 shadow-sm sm:rounded-2xl sm:px-8 border border-slate-200 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-100">
-                <KeyRound size={15} />
-              </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Demo Credentials
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Click any account to auto-fill credentials
-                </p>
-              </div>
-            </div>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-              Demo Mode
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {MOCK_USERS.map((u) => {
-              const isAgent = u.role === 'AGENT'
-              return (
-                <div
-                  key={u.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100/80 hover:border-slate-300 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-medium text-slate-900 text-xs truncate">{u.name}</span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                        u.role === 'SUPER_ADMIN'
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : u.role === 'OFFICE_EXECUTIVE'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : u.role === 'AGENT'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}
-                    >
-                      {u.role.replace('_', ' ')}
-                    </span>
-                    {isAgent && (
-                      <span
-                        className="text-[10px] font-semibold text-amber-700 bg-amber-100/80 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0"
-                        title="Requires GPS Location"
-                      >
-                        <MapPin size={10} /> GPS
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFillDemo(u)}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 px-2.5 py-1 rounded-md bg-white border border-slate-200 hover:border-blue-300 shadow-2xs transition-all shrink-0 ml-2"
-                  >
-                    Fill
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="pt-1 text-center">
-            <span className="text-[11px] text-slate-400">
-              Default Password for all accounts: <code className="font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">Demo@123</code>
-            </span>
-          </div>
         </div>
       </div>
     </div>

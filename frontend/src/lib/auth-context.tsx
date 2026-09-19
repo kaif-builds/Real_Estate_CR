@@ -34,6 +34,7 @@ interface AuthContextType {
     user?: MockUser
     requiresLocation?: boolean
   }>
+  loginAsRole: (roleTitle: string, initialPosition?: GeoPosition) => void
   completeAgentLogin: (agentUser: MockUser, initialPosition?: GeoPosition) => void
   logout: () => void
   // Geolocation tracking
@@ -368,6 +369,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/')
   }
 
+  const loginAsRole = (roleTitle: string, initialPosition?: GeoPosition) => {
+    const roleKeyMap: Record<string, { role: MockRole; user: MockUser }> = {
+      'Super Admin': {
+        role: 'SUPER_ADMIN',
+        user: { id: 'u1', email: 'aman@propdesk.in', name: 'Aman Sharma', role: 'SUPER_ADMIN' },
+      },
+      'Office Executive': {
+        role: 'OFFICE_EXECUTIVE',
+        user: { id: 'u2', email: 'neha@propdesk.in', name: 'Neha Gupta', role: 'OFFICE_EXECUTIVE' },
+      },
+      'Agent': {
+        role: 'AGENT',
+        user: { id: 'u3', email: 'ravi@propdesk.in', name: 'Ravi Mehta', role: 'AGENT' },
+      },
+      'Client': {
+        role: 'CLIENT',
+        user: { id: 'u4', email: 'vikram@propdesk.in', name: 'Vikram Singh', role: 'CLIENT' },
+      },
+    }
+
+    const item = roleKeyMap[roleTitle] || roleKeyMap['Super Admin']
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(item.user))
+    setUserState(item.user)
+    setMockUser(item.user)
+
+    if (item.role === 'AGENT') {
+      if (initialPosition) {
+        setPosition(initialPosition)
+      }
+      startTracking()
+    } else {
+      stopTracking()
+    }
+
+    router.replace('/')
+  }
+
   // ── Logout Handler ──────────────────────────────────────────────────────────
 
   const logout = () => {
@@ -384,6 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading: !sessionResolved,
         login,
+        loginAsRole,
         completeAgentLogin,
         logout,
         position,
