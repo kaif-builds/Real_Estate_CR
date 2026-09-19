@@ -1,0 +1,804 @@
+'use client'
+
+/**
+ * Visits Management Page — Module 9
+ *
+ * List + assignment view for Office Executives & Super Admins.
+ *
+ * Filter bar:
+ * - Status dropdown (Assigned, Accepted, Scheduled, En Route, Arrived, Visit Started,
+ *   Visit Completed, Submitted, Approved, Rejected, Cancelled)
+ * - Agent dropdown (mock Agent-role staff only — no Office Executive users)
+ * - Text search
+ * - "+ Assign Visit" button
+ *
+ * Table columns:
+ * - Visit ID
+ * - Property (ShortLoc badge)
+ * - Client/Party
+ * - Assigned Agent
+ * - Purpose (Property Viewing/Owner Meeting/Verification badge)
+ * - Status (colored badge, distinct color per pipeline stage)
+ * - Scheduled Date
+ * - Actions ("Review" button for Submitted visits, "View Details")
+ *
+ * "+ Assign Visit" form:
+ * - Agent (dropdown, Agent role only)
+ * - Property (dropdown of existing mock properties)
+ * - Client/Party (dropdown)
+ * - Purpose (Property Viewing/Owner Meeting/Verification dropdown)
+ * - Planned Date/Time
+ * - Instructions (textarea)
+ * - Checklist Template (Standard Residential / Standard Commercial / Owner Meeting dropdown)
+ * - Save & Cancel buttons
+ */
+
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import {
+  Plus, Search, RefreshCw, ArrowLeft, MapPin, Calendar, Clock,
+  UserCheck, Building2, ClipboardCheck, CheckCircle2, AlertCircle,
+  Eye, FileText, ChevronRight, Sparkles, X, Play
+} from 'lucide-react'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { VisitExecutionModal } from '@/components/visits/VisitExecutionModal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  formatDateTime, formatDate,
+} from '@/lib/formatters'
+import {
+  MOCK_VISITS, MOCK_USERS, MOCK_PROPERTIES, MOCK_PARTIES,
+  type VisitRow,
+} from '@/lib/mockData'
+
+const VISIT_STATUS_OPTIONS = [
+  { value: '', label: 'All Statuses' },
+  { value: 'Assigned', label: 'Assigned' },
+  { value: 'Accepted', label: 'Accepted' },
+  { value: 'Scheduled', label: 'Scheduled' },
+  { value: 'En Route', label: 'En Route' },
+  { value: 'Arrived', label: 'Arrived' },
+  { value: 'Visit Started', label: 'Visit Started' },
+  { value: 'Visit Completed', label: 'Visit Completed' },
+  { value: 'Submitted', label: 'Submitted (Needs Review)' },
+  { value: 'Approved', label: 'Approved' },
+  { value: 'Rejected', label: 'Rejected' },
+  { value: 'Cancelled', label: 'Cancelled' },
+] as const
+
+const PURPOSE_OPTIONS = [
+  { value: 'Property Viewing', label: 'Property Viewing' },
+  { value: 'Owner Meeting', label: 'Owner Meeting' },
+  { value: 'Verification', label: 'Verification' },
+] as const
+
+const TEMPLATE_OPTIONS = [
+  { value: 'Standard Residential', label: 'Standard Residential' },
+  { value: 'Standard Commercial', label: 'Standard Commercial' },
+  { value: 'Owner Meeting', label: 'Owner Meeting' },
+] as const
+
+// ── Distinct ShortLoc Badge ───────────────────────────────────────────────────
+
+function ShortLocBadge({ code }: { code: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-semibold bg-indigo-50 text-indigo-900 border border-indigo-200">
+      <MapPin size={11} className="text-indigo-600 shrink-0" />
+      <span>{code}</span>
+    </span>
+  )
+}
+
+// ── Status Color Helper ───────────────────────────────────────────────────────
+
+function getVisitStatusBadge(status: VisitRow['status']) {
+  switch (status) {
+    case 'Assigned':
+      return 'bg-slate-100 text-slate-700 border-slate-200'
+    case 'Accepted':
+      return 'bg-sky-100 text-sky-700 border-sky-200'
+    case 'Scheduled':
+      return 'bg-blue-100 text-blue-700 border-blue-200'
+    case 'En Route':
+      return 'bg-indigo-100 text-indigo-700 border-indigo-200'
+    case 'Arrived':
+      return 'bg-purple-100 text-purple-700 border-purple-200'
+    case 'Visit Started':
+      return 'bg-amber-100 text-amber-800 border-amber-200'
+    case 'Visit Completed':
+      return 'bg-teal-100 text-teal-800 border-teal-200'
+    case 'Submitted':
+      return 'bg-orange-100 text-orange-800 border-orange-300 font-bold'
+    case 'Approved':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+    case 'Rejected':
+      return 'bg-rose-100 text-rose-800 border-rose-200'
+    case 'Cancelled':
+      return 'bg-slate-100 text-slate-500 border-slate-200'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
+function getPurposeBadge(purpose: VisitRow['purpose']) {
+  switch (purpose) {
+    case 'Property Viewing':
+      return 'bg-blue-50 text-blue-700 border-blue-200'
+    case 'Owner Meeting':
+      return 'bg-purple-50 text-purple-700 border-purple-200'
+    case 'Verification':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    default:
+      return 'bg-slate-50 text-slate-700 border-slate-200'
+  }
+}
+
+export default function VisitsPage() {
+  const [visits, setVisits] = useState<VisitRow[]>([...MOCK_VISITS])
+  const [view, setView] = useState<'list' | 'assign'>('list')
+  const [selectedVisit, setSelectedVisit] = useState<VisitRow | null>(null)
+  const [executingVisit, setExecutingVisit] = useState<VisitRow | null>(null)
+
+  // Filters
+  const [fStatus, setFStatus] = useState<string>('')
+  const [fAgent, setFAgent] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+
+  // Form State
+  const [formAgentId, setFormAgentId] = useState<string>('u3')
+  const [formPropertyId, setFormPropertyId] = useState<string>('P-1001')
+  const [formClientId, setFormClientId] = useState<string>('p4')
+  const [formPurpose, setFormPurpose] = useState<VisitRow['purpose']>('Property Viewing')
+  const [formDate, setFormDate] = useState<string>('2026-09-20T11:00')
+  const [formInstructions, setFormInstructions] = useState<string>('')
+  const [formTemplate, setFormTemplate] = useState<string>('Standard Residential')
+
+  // ── Agents Only (FILTER OUT OFFICE EXECUTIVE & ADMIN) ────────────────────────
+  // Prompt instruction: "Agent dropdown (mock Agent-role staff only — do NOT include Office Executive users in this list)"
+
+  const agentUsers = useMemo(() => {
+    return MOCK_USERS.filter((u) => u.role === 'AGENT')
+  }, [])
+
+  // ── Filtered Visits ─────────────────────────────────────────────────────────
+
+  const filteredVisits = useMemo(() => {
+    return visits.filter((v) => {
+      if (fStatus && v.status !== fStatus) return false
+      if (fAgent && v.agent_name !== fAgent) return false
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        const matchId = v.id.toLowerCase().includes(q)
+        const matchProp = v.property_short_loc.toLowerCase().includes(q)
+        const matchClient = v.client_name.toLowerCase().includes(q)
+        const matchAgent = v.agent_name.toLowerCase().includes(q)
+        if (!matchId && !matchProp && !matchClient && !matchAgent) return false
+      }
+
+      return true
+    })
+  }, [visits, fStatus, fAgent, searchQuery])
+
+  // ── Assign Form Handlers ────────────────────────────────────────────────────
+
+  const resetForm = () => {
+    setFormAgentId('u3')
+    setFormPropertyId('P-1001')
+    setFormClientId('p4')
+    setFormPurpose('Property Viewing')
+    setFormDate('2026-09-20T11:00')
+    setFormInstructions('')
+    setFormTemplate('Standard Residential')
+  }
+
+  const handleSaveVisit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const agent = agentUsers.find((u) => u.id === formAgentId)
+    const property = MOCK_PROPERTIES.find((p) => p.id === formPropertyId)
+    const client = MOCK_PARTIES.find((p) => p.id === formClientId)
+
+    const newVisit: VisitRow = {
+      id: `V-${Date.now().toString().slice(-3)}`,
+      property_id: formPropertyId,
+      property_short_loc: property?.short_loc || '01-Schm140_Mayank',
+      client_id: formClientId,
+      client_name: client?.name || 'Client',
+      agent_id: formAgentId,
+      agent_name: agent?.name || 'Ravi Mehta',
+      purpose: formPurpose,
+      status: 'Assigned',
+      scheduled_date: formDate ? new Date(formDate).toISOString() : new Date().toISOString(),
+      instructions: formInstructions.trim() || undefined,
+      checklist_template: formTemplate,
+      created_at: new Date().toISOString(),
+    }
+
+    setVisits([newVisit, ...visits])
+    resetForm()
+    setView('list')
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <AppLayout>
+      <div className="space-y-6 max-w-7xl mx-auto pb-12">
+        {/* ================================================================= */}
+        {/* VIEW 1: VISITS LIST VIEW                                          */}
+        {/* ================================================================= */}
+        {view === 'list' && (
+          <>
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-indigo-600 text-white shadow-xs">
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    Field Visits
+                  </h1>
+                  <p className="text-sm text-slate-500">
+                    Dispatch field agents, track real-time inspection stages, and review visit submissions
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <Link href="/visits/review">
+                  <Button variant="outline" className="text-slate-700 border-slate-200">
+                    <ClipboardCheck size={16} className="mr-1.5 text-indigo-600" />
+                    Review Queue
+                    {visits.filter((v) => v.status === 'Submitted').length > 0 && (
+                      <Badge className="ml-2 bg-orange-500 text-white font-bold text-[10px] px-1.5 py-0">
+                        {visits.filter((v) => v.status === 'Submitted').length}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
+
+                <Button
+                  onClick={() => setView('assign')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs"
+                >
+                  <Plus size={16} className="mr-1.5" />
+                  Assign Visit
+                </Button>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <Card className="border-slate-200/80 shadow-xs">
+              <CardContent className="p-4 flex flex-wrap items-center gap-3">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[220px] max-w-sm">
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  />
+                  <Input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by ID, property, client, or agent..."
+                    className="pl-9 text-sm h-9"
+                  />
+                </div>
+
+                {/* Status Dropdown */}
+                <div className="w-full sm:w-auto min-w-[170px]">
+                  <Select
+                    value={fStatus}
+                    onChange={(e) => setFStatus(e.target.value)}
+                    className="h-9 text-sm"
+                  >
+                    {VISIT_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {/* Agent Dropdown (Only Agents, No Office Executives) */}
+                <div className="w-full sm:w-auto min-w-[170px]">
+                  <Select
+                    value={fAgent}
+                    onChange={(e) => setFAgent(e.target.value)}
+                    className="h-9 text-sm"
+                  >
+                    <option value="">All Field Agents</option>
+                    {agentUsers.map((agent) => (
+                      <option key={agent.id} value={agent.name}>
+                        {agent.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {/* Reset Filters */}
+                {(fStatus || fAgent || searchQuery) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFStatus('')
+                      setFAgent('')
+                      setSearchQuery('')
+                    }}
+                    className="text-slate-500 hover:text-slate-800 h-9 px-2.5"
+                    title="Clear filters"
+                  >
+                    <RefreshCw size={14} className="mr-1.5" />
+                    Reset
+                  </Button>
+                )}
+
+                <div className="ml-auto text-xs text-slate-400 font-medium">
+                  Showing {filteredVisits.length} of {visits.length} visits
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Visits Table */}
+            <Card className="border-slate-200/80 shadow-xs overflow-hidden">
+              <CardContent className="p-0">
+                {filteredVisits.length === 0 ? (
+                  <div className="text-center py-16 px-4">
+                    <MapPin className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                    <h3 className="text-base font-semibold text-slate-800">No visits found</h3>
+                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+                      No visits match the current filter parameters. Try clearing filters or assign a new visit.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200/80 bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          <th className="py-3 px-4">Visit ID</th>
+                          <th className="py-3 px-4">Property</th>
+                          <th className="py-3 px-4">Client / Party</th>
+                          <th className="py-3 px-4">Assigned Agent</th>
+                          <th className="py-3 px-4">Purpose</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4">Scheduled Date</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredVisits.map((visit) => {
+                          const isSubmitted = visit.status === 'Submitted'
+
+                          return (
+                            <tr
+                              key={visit.id}
+                              className={`hover:bg-slate-50/80 transition-colors group ${
+                                isSubmitted ? 'bg-orange-50/20' : ''
+                              }`}
+                            >
+                              {/* Visit ID */}
+                              <td className="py-3.5 px-4 font-mono text-xs font-semibold text-slate-800 whitespace-nowrap">
+                                {visit.id}
+                              </td>
+
+                              {/* Property (ShortLoc Badge) */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <div className="space-y-0.5">
+                                  <ShortLocBadge code={visit.property_short_loc} />
+                                  <div className="text-[10px] font-mono text-slate-400">
+                                    ID: {visit.property_id}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Client / Party */}
+                              <td className="py-3.5 px-4 font-semibold text-slate-900 whitespace-nowrap">
+                                {visit.client_name}
+                              </td>
+
+                              {/* Assigned Agent */}
+                              <td className="py-3.5 px-4 text-xs font-medium text-slate-700 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <UserCheck size={13} className="text-slate-400" />
+                                  {visit.agent_name}
+                                </span>
+                              </td>
+
+                              {/* Purpose Badge */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${getPurposeBadge(
+                                    visit.purpose
+                                  )}`}
+                                >
+                                  {visit.purpose}
+                                </span>
+                              </td>
+
+                              {/* Status Badge */}
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getVisitStatusBadge(
+                                    visit.status
+                                  )}`}
+                                >
+                                  {visit.status}
+                                </span>
+                              </td>
+
+                              {/* Scheduled Date */}
+                              <td className="py-3.5 px-4 text-xs text-slate-600 whitespace-nowrap">
+                                {formatDateTime(visit.scheduled_date)}
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {isSubmitted ? (
+                                    <Link href={`/visits/review?id=${visit.id}`}>
+                                      <Button
+                                        size="sm"
+                                        className="h-7 px-2.5 text-xs bg-orange-600 hover:bg-orange-700 text-white shadow-xs font-bold"
+                                      >
+                                        <ClipboardCheck size={12} className="mr-1" />
+                                        Review
+                                      </Button>
+                                    </Link>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 justify-end">
+                                      {visit.status !== 'Approved' &&
+                                        visit.status !== 'Rejected' &&
+                                        visit.status !== 'Cancelled' && (
+                                          <Button
+                                            size="sm"
+                                            onClick={() => setExecutingVisit(visit)}
+                                            className="h-7 px-2 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                                          >
+                                            <Play size={11} className="mr-1 fill-current" />
+                                            Arrival
+                                          </Button>
+                                        )}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setSelectedVisit(visit)}
+                                        className="h-7 px-2.5 text-xs text-slate-700 border-slate-200 hover:bg-slate-50"
+                                      >
+                                        View
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* ================================================================= */}
+        {/* VIEW 2: ASSIGN VISIT FORM                                         */}
+        {/* ================================================================= */}
+        {view === 'assign' && (
+          <div className="space-y-6">
+            {/* Top Navigation Bar */}
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  resetForm()
+                  setView('list')
+                }}
+                className="text-slate-600 hover:text-slate-900 -ml-2"
+              >
+                <ArrowLeft size={16} className="mr-1.5" />
+                Back to Visits List
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    resetForm()
+                    setView('list')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="assign-visit-form"
+                  size="sm"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+                >
+                  Confirm &amp; Assign Visit
+                </Button>
+              </div>
+            </div>
+
+            {/* Form Card */}
+            <Card className="border-slate-200/80 shadow-xs">
+              <CardHeader className="border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-indigo-50 text-indigo-700">
+                    <MapPin size={22} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl font-bold text-slate-900">
+                      Assign Field Inspection / Viewing
+                    </CardTitle>
+                    <CardDescription className="text-sm text-slate-500">
+                      Dispatch a field agent to a target inventory property for client inspection or verification
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-6">
+                <form id="assign-visit-form" onSubmit={handleSaveVisit} className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {/* Agent (Dropdown, Agent role only!) */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="agent" className="text-xs font-semibold text-slate-700">
+                        Field Agent <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        id="agent"
+                        value={formAgentId}
+                        onChange={(e) => setFormAgentId(e.target.value)}
+                        required
+                        className="h-10 text-sm"
+                      >
+                        {agentUsers.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name} (Field Agent)
+                          </option>
+                        ))}
+                      </Select>
+                      <p className="text-[11px] text-slate-400">
+                        Shows field agents available for dispatch
+                      </p>
+                    </div>
+
+                    {/* Property (Dropdown of existing mock properties) */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="property" className="text-xs font-semibold text-slate-700">
+                        Property (Inventory) <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        id="property"
+                        value={formPropertyId}
+                        onChange={(e) => setFormPropertyId(e.target.value)}
+                        required
+                        className="h-10 text-sm font-mono"
+                      >
+                        {MOCK_PROPERTIES.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            [{p.id}] {p.short_loc} — {p.category}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    {/* Client / Party (Dropdown) */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="client" className="text-xs font-semibold text-slate-700">
+                        Client / Party <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        id="client"
+                        value={formClientId}
+                        onChange={(e) => setFormClientId(e.target.value)}
+                        required
+                        className="h-10 text-sm"
+                      >
+                        {MOCK_PARTIES.map((party) => (
+                          <option key={party.id} value={party.id}>
+                            {party.name} ({party.mobile})
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    {/* Purpose (Dropdown) */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="purpose" className="text-xs font-semibold text-slate-700">
+                        Visit Purpose <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        id="purpose"
+                        value={formPurpose}
+                        onChange={(e) => setFormPurpose(e.target.value as VisitRow['purpose'])}
+                        required
+                        className="h-10 text-sm"
+                      >
+                        {PURPOSE_OPTIONS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    {/* Planned Date / Time */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="planned_date" className="text-xs font-semibold text-slate-700">
+                        Planned Date &amp; Time <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="planned_date"
+                        type="datetime-local"
+                        value={formDate}
+                        onChange={(e) => setFormDate(e.target.value)}
+                        required
+                        className="h-10 text-sm"
+                      />
+                    </div>
+
+                    {/* Checklist Template (Dropdown) */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="template" className="text-xs font-semibold text-slate-700">
+                        Checklist Template <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        id="template"
+                        value={formTemplate}
+                        onChange={(e) => setFormTemplate(e.target.value)}
+                        required
+                        className="h-10 text-sm"
+                      >
+                        {TEMPLATE_OPTIONS.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="instructions" className="text-xs font-semibold text-slate-700">
+                      Field Instructions &amp; Notes
+                    </Label>
+                    <Textarea
+                      id="instructions"
+                      value={formInstructions}
+                      onChange={(e) => setFormInstructions(e.target.value)}
+                      placeholder="e.g. Meet client at gate, collect key from guard, take clear photos of meter readings..."
+                      rows={3}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Form Footer Action Buttons */}
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetForm()
+                        setView('list')
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+                    >
+                      Assign Visit
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* View Details Modal */}
+        {selectedVisit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+            <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-50 text-indigo-700">
+                    <MapPin size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">
+                      Visit Summary — {selectedVisit.id}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {formatDateTime(selectedVisit.scheduled_date)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedVisit(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Property</span>
+                    <div className="mt-1 font-semibold text-slate-900">{selectedVisit.property_short_loc}</div>
+                    <div className="text-slate-400 font-mono text-[10px]">ID: {selectedVisit.property_id}</div>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Status</span>
+                    <div className="mt-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${getVisitStatusBadge(selectedVisit.status)}`}>
+                        {selectedVisit.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Client Party</span>
+                    <p className="font-semibold text-slate-900 mt-1">{selectedVisit.client_name}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Assigned Agent</span>
+                    <p className="font-semibold text-slate-900 mt-1">{selectedVisit.agent_name}</p>
+                  </div>
+                </div>
+
+                {selectedVisit.instructions && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-slate-400 uppercase font-semibold">Instructions</span>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-700">
+                      {selectedVisit.instructions}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setSelectedVisit(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Live GPS Visit Execution Modal */}
+        {executingVisit && (
+          <VisitExecutionModal
+            visit={executingVisit}
+            onClose={() => setExecutingVisit(null)}
+            onStatusChange={(id, status) => {
+              setVisits((prev) =>
+                prev.map((v) => (v.id === id ? { ...v, status } : v))
+              )
+            }}
+          />
+        )}
+      </div>
+    </AppLayout>
+  )
+}
