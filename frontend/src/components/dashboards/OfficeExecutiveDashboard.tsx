@@ -15,7 +15,6 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Bell, Building2, ClipboardList, Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { apiGet } from '@/lib/apiClient'
 import {
   formatAgeDays, formatDateTime, priorityClasses, statusClasses,
 } from '@/lib/formatters'

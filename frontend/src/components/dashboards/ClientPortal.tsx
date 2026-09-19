@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { apiGet } from '@/lib/apiClient'
 import {
   formatPrice, formatBudget, formatDate, formatCategory, formatIntent, statusClasses,
 } from '@/lib/formatters'

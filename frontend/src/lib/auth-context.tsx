@@ -6,10 +6,11 @@
  * Provides:
  * 1. Mock authentication with credentials verification against MOCK_USERS
  * 2. Session persistence in sessionStorage ('propdesk_session')
- * 3. Route guard (redirects unauthenticated users to /login)
- * 4. Agent live GPS tracking via navigator.geolocation.watchPosition
- * 5. Reverse geocoding via OpenStreetMap Nominatim with proper headers
- * 6. Permission check via navigator.permissions and mid-session lost permission handling
+ * 3. Background session resolution matching Desktop/CRM (no blocking full-page spinner)
+ * 4. Route guard (redirects unauthenticated users to /login in the background)
+ * 5. Agent live GPS tracking via navigator.geolocation.watchPosition
+ * 6. Reverse geocoding via OpenStreetMap Nominatim with proper headers & timeout
+ * 7. Permission check via navigator.permissions and mid-session lost permission handling
  */
 
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
@@ -60,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   const [user, setUserState] = useState<MockUser | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [sessionResolved, setSessionResolved] = useState<boolean>(false)
 
   // Geolocation states for agents
   const [position, setPosition] = useState<GeoPosition | null>(null)
@@ -72,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const watchIdRef = useRef<number | null>(null)
   const lastGeocodeRef = useRef<{ lat: number; lng: number; time: number } | null>(null)
 
-  // ── Reverse Geocoding via Nominatim with proper headers ─────────────────────
+  // ── Reverse Geocoding via Nominatim with timeout ────────────────────────────
 
   const reverseGeocode = async (lat: number, lng: number) => {
     const now = Date.now()
@@ -88,6 +89,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     lastGeocodeRef.current = { lat, lng, time: now }
 
     try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`,
         {
@@ -95,8 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             'Accept-Language': 'en',
             'User-Agent': 'PropDeskCRM/1.0 (contact@propdesk.in)',
           },
+          signal: controller.signal,
         }
       )
+      clearTimeout(timeoutId)
       if (!res.ok) return
       const data = await res.json()
       const addr = data.address ?? {}
@@ -116,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAddress(data.display_name.split(',').slice(0, 3).join(','))
       }
     } catch {
-      // Fallback or ignore network error for reverse geocoding
+      // Fallback or ignore network error/timeout for reverse geocoding
     }
   }
 
@@ -246,25 +252,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  // ── Initial session restore on mount ────────────────────────────────────────
+  // ── Initial session restore on mount (background resolution) ────────────────
 
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY)
-      if (stored) {
-        const parsed: MockUser = JSON.parse(stored)
-        if (parsed && parsed.id && parsed.email && parsed.role) {
-          setUserState(parsed)
-          setMockUser(parsed)
-          if (parsed.role === 'AGENT') {
-            startTracking()
+      if (typeof window !== 'undefined') {
+        const stored = sessionStorage.getItem(SESSION_STORAGE_KEY)
+        if (stored) {
+          const parsed: MockUser = JSON.parse(stored)
+          if (parsed && parsed.id && parsed.email && parsed.role) {
+            setUserState(parsed)
+            setMockUser(parsed)
+            if (parsed.role === 'AGENT') {
+              startTracking()
+            }
           }
         }
       }
     } catch {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY)
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY)
+      }
     } finally {
-      setIsLoading(false)
+      setSessionResolved(true)
     }
 
     return () => {
@@ -276,9 +286,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── Route guard ─────────────────────────────────────────────────────────────
+  // Runs in the background once session resolution completes
 
   useEffect(() => {
-    if (isLoading) return
+    if (!sessionResolved) return
 
     const isLoginPage = pathname === '/login'
 
@@ -287,7 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (user && isLoginPage) {
       router.replace('/')
     }
-  }, [user, isLoading, pathname, router])
+  }, [user, sessionResolved, pathname, router])
 
   // ── Login Handler ───────────────────────────────────────────────────────────
 
@@ -371,7 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        isLoading,
+        isLoading: !sessionResolved,
         login,
         completeAgentLogin,
         logout,
@@ -385,18 +396,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         requestLocationPermission,
       }}
     >
-      {isLoading ? (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs text-slate-500 font-medium tracking-wide">
-              Loading PropDesk CRM…
-            </span>
-          </div>
-        </div>
-      ) : (
-        children
-      )}
+      {/* Immediately render actual routes without blocking behind a full-page spinner */}
+      {children}
     </AuthContext.Provider>
   )
 }
