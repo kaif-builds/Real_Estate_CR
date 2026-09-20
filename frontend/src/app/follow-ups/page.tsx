@@ -32,8 +32,8 @@
 
 import { useMemo, useState } from 'react'
 import {
-  Plus, Search, RefreshCw, ArrowLeft, Bell, Calendar, CheckCircle2,
-  Clock, AlertCircle, UserCheck, CheckSquare, Sparkles, Filter, MoreHorizontal
+  Plus, ArrowLeft, Bell, Calendar, CheckCircle2,
+  Clock, AlertCircle, UserCheck,
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -43,6 +43,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import {
   formatDateTime, formatDate, statusClasses, priorityClasses,
 } from '@/lib/formatters'
@@ -74,11 +75,10 @@ export default function FollowUpsPage() {
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([...MOCK_FOLLOW_UPS])
   const [view, setView] = useState<'list' | 'add'>('list')
 
-  // Filters
+  // Filters (search handled by DataTable)
   const [fStatus, setFStatus] = useState<string>('')
   const [fPriority, setFPriority] = useState<string>('')
   const [fResponsible, setFResponsible] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState<string>('')
 
   // Add Form State
   const [formLinkedRecord, setFormLinkedRecord] = useState<string>('L-1001')
@@ -126,26 +126,16 @@ export default function FollowUpsPage() {
     return records
   }, [])
 
-  // ── Filtered List ───────────────────────────────────────────────────────────
+  // ── Filtered List (page-specific filters only — search in DataTable) ───────
 
   const filteredFollowUps = useMemo(() => {
     return followUps.filter((item) => {
       if (fStatus && item.status !== fStatus) return false
       if (fPriority && item.priority !== fPriority) return false
       if (fResponsible && item.responsible_name !== fResponsible) return false
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const matchName = item.client_name.toLowerCase().includes(q)
-        const matchPurpose = item.purpose.toLowerCase().includes(q)
-        const matchEntity = item.entity_id.toLowerCase().includes(q)
-        const matchResponsible = item.responsible_name.toLowerCase().includes(q)
-        if (!matchName && !matchPurpose && !matchEntity && !matchResponsible) return false
-      }
-
       return true
     })
-  }, [followUps, fStatus, fPriority, fResponsible, searchQuery])
+  }, [followUps, fStatus, fPriority, fResponsible])
 
   // ── Distinct Staff List for filter ──────────────────────────────────────────
 
@@ -229,6 +219,132 @@ export default function FollowUpsPage() {
     }
   }
 
+  // ── Column Definitions for DataTable ────────────────────────────────────────
+
+  const followUpColumns: ColumnDef<FollowUpRow>[] = [
+    {
+      key: 'client',
+      header: 'Client / Party',
+      sortValue: (r) => r.client_name,
+      render: (r) => (
+        <div>
+          <div className="font-semibold text-slate-900">{r.client_name}</div>
+          <span className="text-[11px] font-mono text-slate-400 font-normal">Ref: {r.entity_id}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      sortValue: (r) => r.entity_type,
+      render: (r) => renderTypeBadge(r.entity_type),
+    },
+    {
+      key: 'purpose',
+      header: 'Purpose',
+      className: 'min-w-[200px]',
+      sortValue: (r) => r.purpose,
+      render: (r) => (
+        <div>
+          <p className="text-slate-800 font-medium text-xs line-clamp-2">{r.purpose}</p>
+          {r.expected_outcome && (
+            <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs" title={r.expected_outcome}>
+              Outcome: {r.expected_outcome}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'priority',
+      header: 'Priority',
+      sortValue: (r) => ['LOW', 'MEDIUM', 'HIGH'].indexOf(r.priority),
+      render: (r) => (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${priorityClasses(r.priority)}`}>
+          {r.priority}
+        </span>
+      ),
+    },
+    {
+      key: 'due_date',
+      header: 'Due Date',
+      sortValue: (r) => r.due_date ? new Date(r.due_date).getTime() : 0,
+      render: (r) => {
+        const isOverdue = r.status === 'OVERDUE'
+        return (
+          <div className="flex items-center gap-1.5 text-xs">
+            {isOverdue ? (
+              <span className="text-red-700 font-bold flex items-center gap-1 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                <AlertCircle size={12} className="text-red-600" />
+                {formatDateTime(r.due_date)}
+              </span>
+            ) : (
+              <span className="text-slate-600 flex items-center gap-1">
+                <Calendar size={12} className="text-slate-400" />
+                {formatDateTime(r.due_date)}
+              </span>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (r) => r.status,
+      render: (r) => (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusClasses(r.status)}`}>
+          {r.status.replace(/_/g, ' ')}
+        </span>
+      ),
+    },
+    {
+      key: 'responsible',
+      header: 'Responsible',
+      sortValue: (r) => r.responsible_name,
+      render: (r) => (
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+          <UserCheck size={13} className="text-slate-400" />
+          {r.responsible_name}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      sortable: false,
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={r.status === 'COMPLETED'}
+            onClick={() => handleMarkDone(r.id)}
+            className={`h-7 px-2.5 text-xs font-medium ${
+              r.status === 'COMPLETED'
+                ? 'text-slate-400 border-slate-200 bg-slate-50'
+                : 'text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+            }`}
+          >
+            <CheckCircle2 size={12} className="mr-1" />
+            Mark Done
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={r.status === 'COMPLETED'}
+            onClick={() => handleReschedule(r.id)}
+            className="h-7 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-50"
+          >
+            <Clock size={12} className="mr-1 text-slate-400" />
+            Reschedule
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -265,255 +381,46 @@ export default function FollowUpsPage() {
               </Button>
             </div>
 
-            {/* Filter Bar */}
-            <Card className="border-slate-200/80 shadow-xs">
-              <CardContent className="p-4 flex flex-wrap items-center gap-3">
-                {/* Text Search */}
-                <div className="relative flex-1 min-w-[240px] max-w-sm">
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                  <Input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by client, purpose, ID..."
-                    className="pl-9 text-sm h-9"
-                  />
-                </div>
-
-                {/* Status Dropdown */}
-                <div className="w-full sm:w-auto min-w-[150px]">
-                  <Select
-                    value={fStatus}
-                    onChange={(e) => setFStatus(e.target.value)}
-                    className="h-9 text-sm"
-                  >
+            {/* DataTable with sorting, search, and page-specific filters */}
+            <DataTable<FollowUpRow>
+              columns={followUpColumns}
+              data={filteredFollowUps}
+              totalCount={followUps.length}
+              rowKey={(r) => r.id}
+              rowClassName={(r) => r.status === 'OVERDUE' ? 'bg-red-50/20' : ''}
+              searchFields={[
+                (r) => r.client_name,
+                (r) => r.purpose,
+                (r) => r.entity_id,
+                (r) => r.responsible_name,
+              ]}
+              searchPlaceholder="Search by client, purpose, ID…"
+              hasActiveFilters={!!fStatus || !!fPriority || !!fResponsible}
+              onClearFilters={() => { setFStatus(''); setFPriority(''); setFResponsible('') }}
+              emptyIcon={<Bell className="h-12 w-12" />}
+              emptyTitle="No follow-ups found"
+              emptyDescription="No follow-up records match the active filter criteria."
+              filterSlot={
+                <>
+                  <Select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="h-8 text-sm min-w-[140px]">
                     {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Priority Dropdown */}
-                <div className="w-full sm:w-auto min-w-[130px]">
-                  <Select
-                    value={fPriority}
-                    onChange={(e) => setFPriority(e.target.value)}
-                    className="h-9 text-sm"
-                  >
+                  <Select value={fPriority} onChange={(e) => setFPriority(e.target.value)} className="h-8 text-sm min-w-[130px]">
                     {PRIORITY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Responsible Staff Dropdown */}
-                <div className="w-full sm:w-auto min-w-[160px]">
-                  <Select
-                    value={fResponsible}
-                    onChange={(e) => setFResponsible(e.target.value)}
-                    className="h-9 text-sm"
-                  >
+                  <Select value={fResponsible} onChange={(e) => setFResponsible(e.target.value)} className="h-8 text-sm min-w-[150px]">
                     <option value="">All Staff</option>
                     {staffOptions.map((staff) => (
-                      <option key={staff} value={staff}>
-                        {staff}
-                      </option>
+                      <option key={staff} value={staff}>{staff}</option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Reset Filters */}
-                {(fStatus || fPriority || fResponsible || searchQuery) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFStatus('')
-                      setFPriority('')
-                      setFResponsible('')
-                      setSearchQuery('')
-                    }}
-                    className="text-slate-500 hover:text-slate-800 h-9 px-2.5"
-                    title="Clear filters"
-                  >
-                    <RefreshCw size={14} className="mr-1.5" />
-                    Reset
-                  </Button>
-                )}
-
-                <div className="ml-auto text-xs text-slate-400 font-medium">
-                  Showing {filteredFollowUps.length} of {followUps.length} follow-ups
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Follow-up Table */}
-            <Card className="border-slate-200/80 shadow-xs overflow-hidden">
-              <CardContent className="p-0">
-                {filteredFollowUps.length === 0 ? (
-                  <div className="text-center py-16 px-4">
-                    <Bell className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                    <h3 className="text-base font-semibold text-slate-800">No follow-ups found</h3>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                      No follow-up records match the active filter criteria. Clear filters or create a new follow-up.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setFStatus('')
-                        setFPriority('')
-                        setFResponsible('')
-                        setSearchQuery('')
-                      }}
-                      className="mt-4"
-                    >
-                      Clear Filters
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200/80 bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                          <th className="py-3 px-4">Client / Party</th>
-                          <th className="py-3 px-4">Type</th>
-                          <th className="py-3 px-4 min-w-[200px]">Purpose</th>
-                          <th className="py-3 px-4">Priority</th>
-                          <th className="py-3 px-4">Due Date</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4">Responsible</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredFollowUps.map((item) => {
-                          const isOverdue = item.status === 'OVERDUE'
-
-                          return (
-                            <tr
-                              key={item.id}
-                              className={`hover:bg-slate-50/80 transition-colors group ${
-                                isOverdue ? 'bg-red-50/20' : ''
-                              }`}
-                            >
-                              {/* Client / Party Name */}
-                              <td className="py-3.5 px-4 font-semibold text-slate-900 whitespace-nowrap">
-                                <div>{item.client_name}</div>
-                                <span className="text-[11px] font-mono text-slate-400 font-normal">
-                                  Ref: {item.entity_id}
-                                </span>
-                              </td>
-
-                              {/* Type Badge */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                {renderTypeBadge(item.entity_type)}
-                              </td>
-
-                              {/* Purpose */}
-                              <td className="py-3.5 px-4">
-                                <p className="text-slate-800 font-medium text-xs line-clamp-2">
-                                  {item.purpose}
-                                </p>
-                                {item.expected_outcome && (
-                                  <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-xs" title={item.expected_outcome}>
-                                    Outcome: {item.expected_outcome}
-                                  </p>
-                                )}
-                              </td>
-
-                              {/* Priority Badge */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${priorityClasses(
-                                    item.priority
-                                  )}`}
-                                >
-                                  {item.priority}
-                                </span>
-                              </td>
-
-                              {/* Due Date */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  {isOverdue ? (
-                                    <span className="text-red-700 font-bold flex items-center gap-1 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                                      <AlertCircle size={12} className="text-red-600" />
-                                      {formatDateTime(item.due_date)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-600 flex items-center gap-1">
-                                      <Calendar size={12} className="text-slate-400" />
-                                      {formatDateTime(item.due_date)}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-
-                              {/* Status Badge */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusClasses(
-                                    item.status
-                                  )}`}
-                                >
-                                  {item.status.replace(/_/g, ' ')}
-                                </span>
-                              </td>
-
-                              {/* Responsible Staff */}
-                              <td className="py-3.5 px-4 text-xs font-medium text-slate-700 whitespace-nowrap">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <UserCheck size={13} className="text-slate-400" />
-                                  {item.responsible_name}
-                                </span>
-                              </td>
-
-                              {/* Actions */}
-                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={item.status === 'COMPLETED'}
-                                    onClick={() => handleMarkDone(item.id)}
-                                    className={`h-7 px-2.5 text-xs font-medium ${
-                                      item.status === 'COMPLETED'
-                                        ? 'text-slate-400 border-slate-200 bg-slate-50'
-                                        : 'text-emerald-700 border-emerald-200 hover:bg-emerald-50'
-                                    }`}
-                                  >
-                                    <CheckCircle2 size={12} className="mr-1" />
-                                    Mark Done
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={item.status === 'COMPLETED'}
-                                    onClick={() => handleReschedule(item.id)}
-                                    className="h-7 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-50"
-                                  >
-                                    <Clock size={12} className="mr-1 text-slate-400" />
-                                    Reschedule
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </>
+              }
+            />
           </>
         )}
 
