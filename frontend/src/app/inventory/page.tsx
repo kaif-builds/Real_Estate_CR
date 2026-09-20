@@ -18,11 +18,13 @@
  * - Save & Cancel buttons.
  */
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
 import {
   Plus, Search, RefreshCw, ArrowLeft, Building2, MapPin,
   AlertTriangle, CheckCircle2, ShieldAlert, Sparkles, Home,
-  LandPlot, Building, Eye, Edit3, X
+  LandPlot, Building, Eye, Edit3, X, Upload, Download,
+  FileSpreadsheet, AlertCircle, CheckCircle, Loader2
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -136,7 +138,257 @@ export default function InventoryPage() {
   const [formPlotSize, setFormPlotSize] = useState<string>('1500')
   const [formPlotUnit, setFormPlotUnit] = useState<string>('sqft')
 
+  // ── Bulk Upload State ───────────────────────────────────────────────────────
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [uploadFileName, setUploadFileName] = useState<string>('')
+  const [uploadParsing, setUploadParsing] = useState(false)
+
+  type UploadRowError = { row: number; field: string; message: string }
+  type ParsedUploadRow = {
+    rowIndex: number
+    data: Record<string, string>
+    property: PropertyRow | null   // null when row has errors
+    errors: UploadRowError[]
+  }
+
+  const [parsedRows, setParsedRows] = useState<ParsedUploadRow[]>([])
+
+  const VALID_CATEGORIES: Record<string, string> = {
+    'RENTAL_RESIDENTIAL': 'RENTAL_RESIDENTIAL',
+    'RENTAL RESIDENTIAL': 'RENTAL_RESIDENTIAL',
+    'RENTAL_COMMERCIAL': 'RENTAL_COMMERCIAL',
+    'RENTAL COMMERCIAL': 'RENTAL_COMMERCIAL',
+    'BUY_SELL_FLAT': 'BUY_SELL_FLAT',
+    'BUY SELL FLAT': 'BUY_SELL_FLAT',
+    'BUY-SELL FLAT': 'BUY_SELL_FLAT',
+    'BUY_SELL_COMMERCIAL': 'BUY_SELL_COMMERCIAL',
+    'BUY SELL COMMERCIAL': 'BUY_SELL_COMMERCIAL',
+    'BUY-SELL COMMERCIAL': 'BUY_SELL_COMMERCIAL',
+    'PLOT': 'PLOT',
+    'PLOT/JAMEEN': 'PLOT',
+  }
+
+  const VALID_STATUSES = new Set([
+    'NEW', 'AVAILABLE', 'UNDER_NEGOTIATION', 'ON_HOLD',
+    'SOLD', 'RENTED', 'LEASED', 'WITHDRAWN',
+  ])
+
+  // ── Download Template ─────────────────────────────────────────────────────
+
+  const handleDownloadTemplate = useCallback(() => {
+    const headers = [
+      'Category', 'ShortLoc', 'Address', 'Price/Rent', 'Source',
+      'Availability Date', 'Status',
+      // Residential / Flat
+      'BHK', 'Furnishing', 'Built-up Area', 'Floor', 'Parking',
+      // Commercial
+      'Seater Capacity', 'Cabins', 'Conference Room', 'Washroom', 'Pantry',
+      // Plot
+      'Facing', 'Plot Number', 'Size', 'Size Unit',
+    ]
+
+    const exampleRow = [
+      'RENTAL_RESIDENTIAL', '01-Schm140_Mayank', 'Flat 101, Heights, Scheme 140, Indore',
+      '18000', 'Owner', '2026-10-01', 'AVAILABLE',
+      '2 BHK', 'Semi-Furnished', '1100', '3rd', '1 Covered',
+      '', '', '', '', '', // commercial fields blank
+      '', '', '', '', // plot fields blank
+    ]
+
+    const instructions = [
+      '──── INSTRUCTIONS ────', '', '', '', '', '', '',
+      '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+    ]
+
+    const wsData = [
+      headers,
+      exampleRow,   // row 2: example
+      instructions, // row 3: instructions (hidden visually)
+    ]
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    // Set column widths for readability
+    ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 4, 16) }))
+
+    // Add a comment-like note to the example row's first cell
+    // (SheetJS doesn't support cell comments easily, so we use a note row)
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Properties')
+
+    // Add an Instructions sheet
+    const instrWs = XLSX.utils.aoa_to_sheet([
+      ['PropDesk CRM — Bulk Import Template'],
+      [''],
+      ['IMPORTANT: Delete the example row (row 2) before uploading!'],
+      [''],
+      ['Valid Category values:'],
+      ['  RENTAL_RESIDENTIAL, RENTAL_COMMERCIAL, BUY_SELL_FLAT, BUY_SELL_COMMERCIAL, PLOT'],
+      [''],
+      ['Valid Status values:'],
+      ['  NEW, AVAILABLE, UNDER_NEGOTIATION, ON_HOLD, SOLD, RENTED, LEASED, WITHDRAWN'],
+      [''],
+      ['Valid Source values:'],
+      ['  Owner, Broker, Builder-Marketing'],
+      [''],
+      ['ShortLoc format: "01-Schm140_Mayank" (zone-locality code)'],
+      [''],
+      ['Category-specific columns:'],
+      ['  Residential/Flat: BHK, Furnishing, Built-up Area, Floor, Parking'],
+      ['  Commercial: Seater Capacity, Cabins, Conference Room (yes/no), Washroom (yes/no), Pantry (yes/no)'],
+      ['  Plot: Facing, Plot Number, Size, Size Unit (sqft/acre/bigha)'],
+      [''],
+      ['Leave category-specific fields blank for non-applicable categories.'],
+    ])
+    instrWs['!cols'] = [{ wch: 80 }]
+    XLSX.utils.book_append_sheet(wb, instrWs, 'Instructions')
+
+    XLSX.writeFile(wb, 'PropDesk_Property_Import_Template.xlsx')
+  }, [])
+
+  // ── Parse Uploaded File ───────────────────────────────────────────────────
+
+  const validateAndParseRow = useCallback((rowData: Record<string, string>, rowIndex: number): ParsedUploadRow => {
+    const errors: UploadRowError[] = []
+    const raw = (key: string): string => (rowData[key] || '').toString().trim()
+
+    // Required: Category
+    const rawCategory = raw('Category').toUpperCase()
+    const resolvedCategory = VALID_CATEGORIES[rawCategory]
+    if (!rawCategory) {
+      errors.push({ row: rowIndex, field: 'Category', message: 'Category is required' })
+    } else if (!resolvedCategory) {
+      errors.push({ row: rowIndex, field: 'Category', message: `Invalid category: "${raw('Category')}"` })
+    }
+
+    // Required: ShortLoc
+    const shortLoc = raw('ShortLoc')
+    if (!shortLoc) {
+      errors.push({ row: rowIndex, field: 'ShortLoc', message: 'ShortLoc is required' })
+    }
+
+    // Required: Status
+    const rawStatus = raw('Status').toUpperCase().replace(/\s+/g, '_')
+    if (!rawStatus) {
+      errors.push({ row: rowIndex, field: 'Status', message: 'Status is required' })
+    } else if (!VALID_STATUSES.has(rawStatus)) {
+      errors.push({ row: rowIndex, field: 'Status', message: `Invalid status: "${raw('Status')}"` })
+    }
+
+    // Price (optional but should be numeric if provided)
+    const priceStr = raw('Price/Rent')
+    const price = priceStr ? parseFloat(priceStr.replace(/[₹,\s]/g, '')) : 0
+    if (priceStr && isNaN(price)) {
+      errors.push({ row: rowIndex, field: 'Price/Rent', message: 'Price must be a number' })
+    }
+
+    // Build property if no errors
+    let property: PropertyRow | null = null
+    if (errors.length === 0) {
+      const category = resolvedCategory!
+      let detailsJson: Record<string, unknown> = {}
+
+      if (category === 'RENTAL_RESIDENTIAL' || category === 'BUY_SELL_FLAT') {
+        detailsJson = {
+          bhk: raw('BHK') || undefined,
+          furnishing: raw('Furnishing') || undefined,
+          built_up_area: raw('Built-up Area') ? Number(raw('Built-up Area')) : undefined,
+          floor: raw('Floor') || undefined,
+          parking: raw('Parking') || undefined,
+        }
+      } else if (category === 'RENTAL_COMMERCIAL' || category === 'BUY_SELL_COMMERCIAL') {
+        detailsJson = {
+          seater_capacity: raw('Seater Capacity') ? Number(raw('Seater Capacity')) : undefined,
+          cabins: raw('Cabins') ? Number(raw('Cabins')) : undefined,
+          conference_room: raw('Conference Room') ? raw('Conference Room').toLowerCase() === 'yes' : undefined,
+          washroom: raw('Washroom') ? raw('Washroom').toLowerCase() === 'yes' : undefined,
+          pantry: raw('Pantry') ? raw('Pantry').toLowerCase() === 'yes' : undefined,
+          built_up_area: raw('Built-up Area') ? Number(raw('Built-up Area')) : undefined,
+        }
+      } else if (category === 'PLOT') {
+        detailsJson = {
+          facing: raw('Facing') || undefined,
+          plot_number: raw('Plot Number') || undefined,
+          size: raw('Size') ? Number(raw('Size')) : undefined,
+          unit: raw('Size Unit') || 'sqft',
+        }
+      }
+
+      // Remove undefined values
+      detailsJson = Object.fromEntries(Object.entries(detailsJson).filter(([, v]) => v !== undefined))
+
+      property = {
+        id: `P-${Date.now().toString().slice(-4)}-${rowIndex}`,
+        category,
+        short_loc: shortLoc,
+        address: raw('Address') || null,
+        price: price || 0,
+        status: rawStatus,
+        owner_id: 'p1',
+        owner_name: 'Imported',
+        source: raw('Source') || 'Owner',
+        availability_date: raw('Availability Date') || 'Immediate',
+        details_json: Object.keys(detailsJson).length > 0 ? detailsJson : null,
+        last_verified_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      }
+    }
+
+    return { rowIndex, data: rowData, property, errors }
+  }, [])
+
+  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadFileName(file.name)
+    setUploadParsing(true)
+    setShowUploadDialog(true)
+    setParsedRows([])
+
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+        const jsonRows = XLSX.utils.sheet_to_json<Record<string, string>>(firstSheet, { defval: '' })
+
+        // Filter out obvious instruction/example rows
+        const dataRows = jsonRows.filter((row) => {
+          const firstVal = Object.values(row)[0]?.toString() || ''
+          return !firstVal.startsWith('──') && !firstVal.startsWith('EXAMPLE')
+        })
+
+        const parsed = dataRows.map((row, i) => validateAndParseRow(row, i + 2)) // +2 for 1-indexed + header row
+        setParsedRows(parsed)
+      } catch {
+        setParsedRows([])
+      } finally {
+        setUploadParsing(false)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+
+    // Reset file input so same file can be re-selected
+    e.target.value = ''
+  }, [validateAndParseRow])
+
+  const validRows = parsedRows.filter((r) => r.errors.length === 0)
+  const errorRows = parsedRows.filter((r) => r.errors.length > 0)
+
+  const handleConfirmImport = useCallback(() => {
+    const newProperties = validRows.map((r) => r.property!).reverse()
+    setProperties((prev) => [...newProperties, ...prev])
+    setShowUploadDialog(false)
+    setParsedRows([])
+    setUploadFileName('')
+  }, [validRows])
+
   // ── Filter Logic ────────────────────────────────────────────────────────────
+
 
   const filteredProperties = useMemo(() => {
     return properties.filter((prop) => {
@@ -300,13 +552,41 @@ export default function InventoryPage() {
                   </div>
                 </div>
               </div>
-              <Button
-                onClick={() => setView('add')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs"
-              >
-                <Plus size={16} className="mr-1.5" />
-                Add Property
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* Hidden file input for Excel upload */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelected}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadTemplate}
+                  className="text-slate-700 border-slate-300 hover:bg-slate-50 font-medium shadow-xs"
+                  title="Download .xlsx template with correct column headers"
+                >
+                  <Download size={16} className="mr-1.5 text-slate-500" />
+                  Template
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 font-medium shadow-xs"
+                  title="Upload properties from an Excel file"
+                >
+                  <Upload size={16} className="mr-1.5" />
+                  Upload Excel
+                </Button>
+                <Button
+                  onClick={() => setView('add')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs"
+                >
+                  <Plus size={16} className="mr-1.5" />
+                  Add Property
+                </Button>
+              </div>
             </div>
 
             {/* Filter Bar */}
@@ -1169,6 +1449,226 @@ export default function InventoryPage() {
           </div>
         )}
       </div>
+
+      {/* ================================================================= */}
+      {/* BULK UPLOAD PREVIEW DIALOG                                         */}
+      {/* ================================================================= */}
+      {/* TODO: Once real backend is wired, parsed data will POST to a       */}
+      {/*       bulk-import API endpoint instead of adding to local state.   */}
+      {showUploadDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              setShowUploadDialog(false)
+              setParsedRows([])
+              setUploadFileName('')
+            }}
+          />
+
+          {/* Dialog */}
+          <div className="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                  <FileSpreadsheet size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Import Properties</h2>
+                  <p className="text-sm text-slate-500">
+                    Preview and validate data from <span className="font-medium text-slate-700">{uploadFileName}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowUploadDialog(false)
+                  setParsedRows([])
+                  setUploadFileName('')
+                }}
+                className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-auto p-6 space-y-4">
+              {/* Parsing state */}
+              {uploadParsing && (
+                <div className="flex items-center justify-center gap-3 py-12 text-slate-500">
+                  <Loader2 size={24} className="animate-spin text-indigo-500" />
+                  <span className="text-sm font-medium">Parsing spreadsheet…</span>
+                </div>
+              )}
+
+              {/* No data */}
+              {!uploadParsing && parsedRows.length === 0 && (
+                <div className="text-center py-12">
+                  <FileSpreadsheet className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                  <h3 className="text-base font-semibold text-slate-800">No data rows found</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    The spreadsheet appears to be empty or could not be parsed. Please check the file and try again.
+                  </p>
+                </div>
+              )}
+
+              {/* Results summary + table */}
+              {!uploadParsing && parsedRows.length > 0 && (
+                <>
+                  {/* Validation Summary */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <FileSpreadsheet size={16} className="text-slate-500" />
+                      <span className="text-sm font-medium text-slate-700">
+                        {parsedRows.length} row{parsedRows.length !== 1 ? 's' : ''} parsed
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                      <CheckCircle size={16} className="text-emerald-600" />
+                      <span className="text-sm font-medium text-emerald-700">
+                        {validRows.length} valid
+                      </span>
+                    </div>
+
+                    {errorRows.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+                        <AlertCircle size={16} className="text-red-600" />
+                        <span className="text-sm font-medium text-red-700">
+                          {errorRows.length} row{errorRows.length !== 1 ? 's' : ''} with errors
+                        </span>
+                      </div>
+                    )}
+
+                    <span className="text-xs text-slate-400 ml-auto">
+                      {validRows.length} of {parsedRows.length} rows valid
+                      {errorRows.length > 0 && ' — rows with errors will be skipped'}
+                    </span>
+                  </div>
+
+                  {/* Preview Table */}
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto max-h-[50vh]">
+                      <table className="w-full text-left text-sm border-collapse">
+                        <thead className="sticky top-0 z-10">
+                          <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            <th className="py-2.5 px-3 w-12">Row</th>
+                            <th className="py-2.5 px-3 w-12">Status</th>
+                            <th className="py-2.5 px-3">Category</th>
+                            <th className="py-2.5 px-3">ShortLoc</th>
+                            <th className="py-2.5 px-3">Address</th>
+                            <th className="py-2.5 px-3 text-right">Price/Rent</th>
+                            <th className="py-2.5 px-3">Status</th>
+                            <th className="py-2.5 px-3">Source</th>
+                            <th className="py-2.5 px-3">Issues</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {parsedRows.map((row) => {
+                            const hasErrors = row.errors.length > 0
+                            return (
+                              <tr
+                                key={row.rowIndex}
+                                className={
+                                  hasErrors
+                                    ? 'bg-red-50/60 hover:bg-red-50'
+                                    : 'hover:bg-slate-50/80'
+                                }
+                              >
+                                <td className="py-2.5 px-3 font-mono text-xs text-slate-500">
+                                  {row.rowIndex}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  {hasErrors ? (
+                                    <AlertCircle size={16} className="text-red-500" />
+                                  ) : (
+                                    <CheckCircle size={16} className="text-emerald-500" />
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-xs font-medium">
+                                  <span className={hasErrors && row.errors.some(e => e.field === 'Category') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-700'}>
+                                    {row.data['Category'] || '—'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-xs font-mono">
+                                  <span className={hasErrors && row.errors.some(e => e.field === 'ShortLoc') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-700'}>
+                                    {row.data['ShortLoc'] || '—'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-xs text-slate-600 truncate max-w-[180px]">
+                                  {row.data['Address'] || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-xs text-right font-medium text-slate-700">
+                                  {row.data['Price/Rent'] || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-xs">
+                                  <span className={hasErrors && row.errors.some(e => e.field === 'Status') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-600'}>
+                                    {row.data['Status'] || '—'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-xs text-slate-600">
+                                  {row.data['Source'] || '—'}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  {hasErrors ? (
+                                    <div className="space-y-0.5">
+                                      {row.errors.map((err, i) => (
+                                        <div key={i} className="text-[11px] text-red-600 font-medium">
+                                          {err.field}: {err.message}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-emerald-600">✓ OK</span>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-400">
+                {validRows.length > 0
+                  ? `${validRows.length} valid propert${validRows.length === 1 ? 'y' : 'ies'} will be imported`
+                  : 'No valid rows to import'}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowUploadDialog(false)
+                    setParsedRows([])
+                    setUploadFileName('')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleConfirmImport}
+                  disabled={validRows.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50"
+                >
+                  <CheckCircle size={14} className="mr-1.5" />
+                  Import {validRows.length} Propert{validRows.length === 1 ? 'y' : 'ies'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
