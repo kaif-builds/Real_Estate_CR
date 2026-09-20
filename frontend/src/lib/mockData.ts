@@ -263,6 +263,7 @@ export interface MatchRow {
   score: number
   tier: string
   status: string
+  reject_reason?: string | null
   score_breakdown: Record<string, string>
 }
 
