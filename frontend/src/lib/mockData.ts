@@ -478,6 +478,13 @@ export interface CallLogRow {
   call_time: string
   remarks: string
   callback_time?: string | null
+  // AI call recording analysis (populated when a recording is uploaded + analyzed)
+  recording_url?: string | null            // blob URL for session playback
+  ai_transcript?: string | null
+  ai_summary?: string | null
+  ai_rates?: { mention: string; amount: string; context: string }[] | null
+  ai_sentiment?: 'Interested' | 'Neutral' | 'Not Interested' | null
+  ai_next_action?: string | null
 }
 
 export const MOCK_CALL_LOGS: CallLogRow[] = [

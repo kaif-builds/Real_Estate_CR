@@ -33,11 +33,12 @@
  * - Save & Cancel buttons
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Plus, Search, RefreshCw, ArrowLeft, Phone, PhoneCall, PhoneIncoming,
   PhoneOutgoing, PhoneMissed, Clock, Calendar, UserCheck, CheckCircle2,
-  AlertCircle, Sparkles, MessageSquare, History, X
+  AlertCircle, Sparkles, MessageSquare, History, X,
+  Upload, Mic, ChevronDown, ChevronUp, FileAudio, Loader2
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -52,7 +53,8 @@ import {
 } from '@/lib/formatters'
 import {
   MOCK_CALL_LOGS, MOCK_PARTIES, MOCK_LEADS, MOCK_USERS,
-  type CallLogRow,
+  MOCK_FOLLOW_UPS,
+  type CallLogRow, type FollowUpRow,
 } from '@/lib/mockData'
 
 // ── Dropdown Constants ────────────────────────────────────────────────────────
@@ -102,6 +104,23 @@ export default function TelecallingPage() {
   const [formScheduleCallback, setFormScheduleCallback] = useState<boolean>(false)
   const [formCallbackDate, setFormCallbackDate] = useState<string>('2026-09-21T11:00')
   const [partySearch, setPartySearch] = useState<string>('')
+
+  // Recording upload + AI analysis state
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [recordingFile, setRecordingFile] = useState<File | null>(null)
+  const [recordingBlobUrl, setRecordingBlobUrl] = useState<string | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [analysisResult, setAnalysisResult] = useState<{
+    transcript: string
+    summary: string
+    rates: { mention: string; amount: string; context: string }[]
+    sentiment: 'Interested' | 'Neutral' | 'Not Interested'
+    nextAction: string
+  } | null>(null)
+  const [editableNextAction, setEditableNextAction] = useState('')
+  const [showTranscript, setShowTranscript] = useState(false)
+  const [followUpSaved, setFollowUpSaved] = useState(false)
 
   // ── Unified Searchable Parties / Contacts List ──────────────────────────────
 
@@ -247,7 +266,96 @@ export default function TelecallingPage() {
     setFormScheduleCallback(false)
     setFormCallbackDate('2026-09-21T11:00')
     setPartySearch('')
+    // Reset recording state
+    setRecordingFile(null)
+    if (recordingBlobUrl) URL.revokeObjectURL(recordingBlobUrl)
+    setRecordingBlobUrl(null)
+    setIsAnalyzing(false)
+    setAnalysisError(null)
+    setAnalysisResult(null)
+    setEditableNextAction('')
+    setShowTranscript(false)
+    setFollowUpSaved(false)
   }
+
+  // ── Recording Upload Handler ────────────────────────────────────────────────
+
+  const handleRecordingUpload = async (file: File) => {
+    // Validate client-side
+    const allowedExts = /\.(mp3|m4a|wav|webm)$/i
+    if (!allowedExts.test(file.name)) {
+      setAnalysisError(`Unsupported file type. Accepted: .mp3, .m4a, .wav, .webm`)
+      return
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setAnalysisError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 25MB.`)
+      return
+    }
+
+    setRecordingFile(file)
+    setRecordingBlobUrl(URL.createObjectURL(file))
+    setAnalysisError(null)
+    setAnalysisResult(null)
+    setFollowUpSaved(false)
+    setIsAnalyzing(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('audio', file)
+
+      const res = await fetch('/api/summarize-call', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setAnalysisError(data.error || `Server error (${res.status})`)
+        setIsAnalyzing(false)
+        return
+      }
+
+      setAnalysisResult(data)
+      setEditableNextAction(data.nextAction || '')
+    } catch (err) {
+      setAnalysisError(
+        err instanceof Error ? err.message : 'Network error — could not reach the server.'
+      )
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  // ── Save as Follow-up ──────────────────────────────────────────────────────
+
+  const handleSaveFollowUp = () => {
+    if (!analysisResult || !editableNextAction.trim()) return
+
+    const party = MOCK_PARTIES.find((p) => p.id === formPartyId)
+    const caller = MOCK_USERS.find((u) => u.id === formCallerId)
+
+    const newFollowUp: FollowUpRow = {
+      id: `FU-${Date.now().toString().slice(-4)}`,
+      client_name: party?.name || 'Contact',
+      client_id: formPartyId,
+      entity_type: 'Lead',
+      entity_id: MOCK_LEADS.find((l) => l.party_id === formPartyId)?.id || 'L-0000',
+      purpose: editableNextAction.trim(),
+      priority: analysisResult.sentiment === 'Interested' ? 'HIGH' : 'MEDIUM',
+      due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // +2 days
+      status: 'PENDING',
+      responsible_name: caller?.name || 'Neha Kapoor',
+      responsible_id: formCallerId,
+      expected_outcome: `AI-generated from call recording: ${analysisResult.summary}`,
+      created_at: new Date().toISOString(),
+    }
+
+    MOCK_FOLLOW_UPS.unshift(newFollowUp)
+    setFollowUpSaved(true)
+  }
+
+  // ── Save Call Log Handler ──────────────────────────────────────────────────
 
   const handleSaveCall = (e: React.FormEvent) => {
     e.preventDefault()
@@ -268,6 +376,13 @@ export default function TelecallingPage() {
       call_time: new Date().toISOString(),
       remarks: formRemarks.trim() || 'Call completed successfully',
       callback_time: formScheduleCallback ? new Date(formCallbackDate).toISOString() : null,
+      // Attach AI analysis if recording was uploaded
+      recording_url: recordingBlobUrl || null,
+      ai_transcript: analysisResult?.transcript || null,
+      ai_summary: analysisResult?.summary || null,
+      ai_rates: analysisResult?.rates || null,
+      ai_sentiment: analysisResult?.sentiment || null,
+      ai_next_action: analysisResult?.nextAction || null,
     }
 
     setCalls([newCall, ...calls])
@@ -701,6 +816,199 @@ export default function TelecallingPage() {
                       rows={3}
                       className="text-sm"
                     />
+                  </div>
+
+                  {/* ── Recording Upload + AI Analysis ──────────────────────── */}
+                  <div className="space-y-4 pt-2 border-t border-slate-100">
+                    <div>
+                      <Label className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        <Mic size={15} className="text-indigo-600" />
+                        Upload Call Recording
+                        <span className="text-[10px] font-normal text-slate-400 ml-1">(optional — .mp3, .m4a, .wav, max 25MB)</span>
+                      </Label>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Upload a recording to get AI-powered transcription, summary, and sentiment analysis
+                      </p>
+                    </div>
+
+                    {/* File picker */}
+                    <div className="flex items-center gap-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".mp3,.m4a,.wav,.webm,audio/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) handleRecordingUpload(f)
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isAnalyzing}
+                        className="text-xs text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                      >
+                        <Upload size={13} className="mr-1.5" />
+                        {recordingFile ? 'Replace Recording' : 'Upload Recording'}
+                      </Button>
+                      {recordingFile && (
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <FileAudio size={13} className="text-indigo-500" />
+                          {recordingFile.name}
+                          <span className="text-slate-400">
+                            ({(recordingFile.size / 1024 / 1024).toFixed(1)}MB)
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Audio playback */}
+                    {recordingBlobUrl && (
+                      <audio controls src={recordingBlobUrl} className="w-full max-w-md h-10" />
+                    )}
+
+                    {/* Loading state */}
+                    {isAnalyzing && (
+                      <div className="flex items-center gap-3 p-4 bg-indigo-50/60 rounded-xl border border-indigo-100 animate-pulse">
+                        <Loader2 size={18} className="text-indigo-600 animate-spin" />
+                        <div>
+                          <p className="text-sm font-semibold text-indigo-900">Transcribing and analyzing...</p>
+                          <p className="text-xs text-indigo-700/70">This may take 15-30 seconds depending on recording length</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Error display */}
+                    {analysisError && (
+                      <div className="p-4 bg-red-50 rounded-xl border border-red-200 flex items-start gap-3">
+                        <AlertCircle size={16} className="text-red-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-red-900">Analysis Failed</p>
+                          <p className="text-xs text-red-700 mt-0.5">{analysisError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Analysis results */}
+                    {analysisResult && !isAnalyzing && (
+                      <div className="space-y-4 p-4 bg-gradient-to-br from-indigo-50/40 to-purple-50/30 rounded-xl border border-indigo-100">
+                        <div className="flex items-center gap-2">
+                          <Sparkles size={15} className="text-indigo-600" />
+                          <span className="text-sm font-bold text-indigo-900">AI Analysis Results</span>
+                        </div>
+
+                        {/* Summary */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide">Summary</span>
+                          <p className="text-sm text-slate-800 bg-white/80 p-3 rounded-lg border border-slate-100">
+                            {analysisResult.summary}
+                          </p>
+                        </div>
+
+                        {/* Sentiment badge */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide">Client Sentiment:</span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                            analysisResult.sentiment === 'Interested'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : analysisResult.sentiment === 'Not Interested'
+                              ? 'bg-red-100 text-red-800 border-red-300'
+                              : 'bg-amber-100 text-amber-800 border-amber-300'
+                          }`}>
+                            {analysisResult.sentiment}
+                          </span>
+                        </div>
+
+                        {/* Rates/Prices table */}
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide">Prices / Rates Mentioned</span>
+                          {analysisResult.rates.length > 0 ? (
+                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white/80">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="bg-slate-50 text-slate-500 text-left">
+                                    <th className="px-3 py-2 font-semibold">Mention</th>
+                                    <th className="px-3 py-2 font-semibold">Amount</th>
+                                    <th className="px-3 py-2 font-semibold">Context</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {analysisResult.rates.map((rate, i) => (
+                                    <tr key={i} className="border-t border-slate-100">
+                                      <td className="px-3 py-2 text-slate-800">{rate.mention}</td>
+                                      <td className="px-3 py-2 font-semibold text-slate-900">{rate.amount}</td>
+                                      <td className="px-3 py-2 text-slate-600">{rate.context}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic bg-white/80 p-2.5 rounded-lg border border-slate-100">
+                              No specific rates or prices mentioned in the call.
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Transcript (collapsible) */}
+                        <div className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowTranscript(!showTranscript)}
+                            className="flex items-center gap-1.5 text-[10px] text-indigo-600 uppercase font-semibold tracking-wide hover:text-indigo-800 transition-colors"
+                          >
+                            {showTranscript ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            Full Transcript {showTranscript ? '(collapse)' : '(expand)'}
+                          </button>
+                          {showTranscript && (
+                            <div className="bg-white/80 p-3 rounded-lg border border-slate-100 max-h-60 overflow-y-auto">
+                              <p className="text-xs text-slate-700 whitespace-pre-wrap font-mono leading-relaxed">
+                                {analysisResult.transcript}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Suggested next action (editable) + Save as Follow-up */}
+                        <div className="space-y-2 pt-2 border-t border-indigo-100">
+                          <span className="text-[10px] text-slate-500 uppercase font-semibold tracking-wide">Suggested Next Action</span>
+                          <Textarea
+                            value={editableNextAction}
+                            onChange={(e) => { setEditableNextAction(e.target.value); setFollowUpSaved(false) }}
+                            rows={2}
+                            className="text-sm bg-white/80"
+                            placeholder="Edit the suggested next action..."
+                          />
+                          <div className="flex items-center gap-3">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleSaveFollowUp}
+                              disabled={!editableNextAction.trim() || followUpSaved}
+                              className={`text-xs font-medium ${
+                                followUpSaved
+                                  ? 'bg-emerald-600 hover:bg-emerald-600 text-white'
+                                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                              }`}
+                            >
+                              {followUpSaved ? (
+                                <><CheckCircle2 size={12} className="mr-1" /> Follow-up Saved</>
+                              ) : (
+                                <><Calendar size={12} className="mr-1" /> Save as Follow-up</>
+                              )}
+                            </Button>
+                            {followUpSaved && (
+                              <span className="text-xs text-emerald-700 font-medium">
+                                Created as a pending follow-up (due in 2 days)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Schedule Callback Toggle */}
