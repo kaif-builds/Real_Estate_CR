@@ -11,7 +11,8 @@
  * Will be swapped to real API calls during the backend-wiring pass.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
@@ -29,20 +30,30 @@ import { MOCK_LEADS, MOCK_PARTIES, MOCK_USERS, type LeadRow } from '@/lib/mockDa
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STATUSES   = ['', 'NEW', 'CONTACTED', 'QUALIFIED', 'LOST'] as const
+const STATUSES   = ['', 'ACTIVE', 'NEW', 'CONTACTED', 'QUALIFIED', 'LOST'] as const
 const TYPES      = ['', 'BUYER', 'SELLER', 'TENANT', 'LANDLORD', 'INVESTOR', 'CONSULTANT'] as const
 const PRIORITIES = ['', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function LeadsPage() {
+function LeadsContent() {
+  const searchParams = useSearchParams()
+  const initialStatus = searchParams.get('status') || ''
+  const initialSearch = searchParams.get('search') || ''
+
   // Local mutable copy of leads (supports create + inline patch)
   const [leads, setLeads] = useState<LeadRow[]>([...MOCK_LEADS])
 
   // Page-specific filters (search handled by DataTable)
-  const [fStatus, setFStatus]     = useState('')
+  const [fStatus, setFStatus]     = useState(initialStatus)
   const [fType, setFType]         = useState('')
   const [fPriority, setFPriority] = useState('')
+
+  useEffect(() => {
+    if (initialStatus) {
+      setFStatus(initialStatus)
+    }
+  }, [initialStatus])
 
   // Modal
   const [showCreate, setShowCreate] = useState(false)
@@ -50,7 +61,13 @@ export default function LeadsPage() {
   // Filtered view (page-specific filters only — search is in DataTable)
   const filtered = useMemo(() => {
     let items = leads
-    if (fStatus)   items = items.filter(l => l.status === fStatus)
+    if (fStatus) {
+      if (fStatus === 'ACTIVE') {
+        items = items.filter(l => l.status !== 'LOST' && l.status !== 'Lost')
+      } else {
+        items = items.filter(l => l.status === fStatus)
+      }
+    }
     if (fType)     items = items.filter(l => l.lead_type === fType)
     if (fPriority) items = items.filter(l => l.priority === fPriority)
     return items
@@ -201,6 +218,7 @@ export default function LeadsPage() {
           columns={columns}
           data={filtered}
           totalCount={leads.length}
+          initialSearch={initialSearch}
           rowKey={(r) => r.id}
           searchFields={[
             (r) => r.party_name,
@@ -217,7 +235,8 @@ export default function LeadsPage() {
             <>
               <Select value={fStatus} onChange={e => setFStatus(e.target.value)} className="h-8 text-sm min-w-[120px]">
                 <option value="">All Status</option>
-                {STATUSES.filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
+                <option value="ACTIVE">Active (All)</option>
+                {STATUSES.filter(s => Boolean(s) && s !== 'ACTIVE').map(s => <option key={s} value={s}>{s}</option>)}
               </Select>
               <Select value={fType} onChange={e => setFType(e.target.value)} className="h-8 text-sm min-w-[120px]">
                 <option value="">All Types</option>
@@ -291,3 +310,18 @@ export default function LeadsPage() {
     </AppLayout>
   )
 }
+
+export default function LeadsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen text-slate-400 text-sm">
+          Loading Leads…
+        </div>
+      }
+    >
+      <LeadsContent />
+    </Suspense>
+  )
+}
+

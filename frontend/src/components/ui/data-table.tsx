@@ -16,7 +16,7 @@
  * sortable headers, the search box, a clear-all action, and the count display.
  */
 
-import React, { useMemo, useState, useCallback } from 'react'
+import React, { useMemo, useState, useCallback, useEffect } from 'react'
 import { ArrowUp, ArrowDown, ArrowUpDown, Search, RefreshCw } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -47,6 +47,8 @@ export interface DataTableProps<T> {
   totalCount?: number
   /** Fields to include in text search. Each accessor receives a row. */
   searchFields?: ((row: T) => string | null | undefined)[]
+  /** Initial text search query (e.g. from URL search params) */
+  initialSearch?: string
   /** Placeholder text for the search box */
   searchPlaceholder?: string
   /** Unique key extractor for each row */
@@ -74,6 +76,7 @@ export function DataTable<T>({
   data,
   totalCount,
   searchFields,
+  initialSearch,
   searchPlaceholder = 'Search…',
   rowKey,
   rowClassName,
@@ -84,9 +87,15 @@ export function DataTable<T>({
   emptyTitle = 'No records found',
   emptyDescription = 'Try adjusting your filters or search criteria.',
 }: DataTableProps<T>) {
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState(initialSearch ?? '')
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  useEffect(() => {
+    if (initialSearch !== undefined) {
+      setSearchQuery(initialSearch)
+    }
+  }, [initialSearch])
 
   // ── Search ────────────────────────────────────────────────────────────────
 

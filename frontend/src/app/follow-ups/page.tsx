@@ -30,7 +30,8 @@
  * - Save & Cancel buttons
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   Plus, ArrowLeft, Bell, Calendar, CheckCircle2,
   Clock, AlertCircle, UserCheck,
@@ -71,14 +72,24 @@ const PRIORITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
 ] as const
 
-export default function FollowUpsPage() {
+function FollowUpsContent() {
+  const searchParams = useSearchParams()
+  const initialStatus = (searchParams.get('status') || '').toUpperCase()
+  const initialSearch = searchParams.get('search') || ''
+
   const [followUps, setFollowUps] = useState<FollowUpRow[]>([...MOCK_FOLLOW_UPS])
   const [view, setView] = useState<'list' | 'add'>('list')
 
   // Filters (search handled by DataTable)
-  const [fStatus, setFStatus] = useState<string>('')
+  const [fStatus, setFStatus] = useState<string>(initialStatus)
   const [fPriority, setFPriority] = useState<string>('')
   const [fResponsible, setFResponsible] = useState<string>('')
+
+  useEffect(() => {
+    if (initialStatus) {
+      setFStatus(initialStatus)
+    }
+  }, [initialStatus])
 
   // Add Form State
   const [formLinkedRecord, setFormLinkedRecord] = useState<string>('L-1001')
@@ -130,7 +141,7 @@ export default function FollowUpsPage() {
 
   const filteredFollowUps = useMemo(() => {
     return followUps.filter((item) => {
-      if (fStatus && item.status !== fStatus) return false
+      if (fStatus && item.status.toUpperCase() !== fStatus.toUpperCase()) return false
       if (fPriority && item.priority !== fPriority) return false
       if (fResponsible && item.responsible_name !== fResponsible) return false
       return true
@@ -386,6 +397,7 @@ export default function FollowUpsPage() {
               columns={followUpColumns}
               data={filteredFollowUps}
               totalCount={followUps.length}
+              initialSearch={initialSearch}
               rowKey={(r) => r.id}
               rowClassName={(r) => r.status === 'OVERDUE' ? 'bg-red-50/20' : ''}
               searchFields={[
@@ -645,3 +657,18 @@ export default function FollowUpsPage() {
     </AppLayout>
   )
 }
+
+export default function FollowUpsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen text-slate-400 text-sm">
+          Loading Follow-ups…
+        </div>
+      }
+    >
+      <FollowUpsContent />
+    </Suspense>
+  )
+}
+

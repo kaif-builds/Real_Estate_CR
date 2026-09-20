@@ -33,7 +33,8 @@
  * - Save & Cancel buttons
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Plus, ArrowLeft, MapPin, Calendar, Clock,
@@ -140,15 +141,26 @@ function getPurposeBadge(purpose: VisitRow['purpose']) {
   }
 }
 
-export default function VisitsPage() {
+function VisitsContent() {
+  const searchParams = useSearchParams()
+  const rawStatus = searchParams.get('status') || ''
+  const initialStatus = rawStatus.toUpperCase() === 'COMPLETED' ? 'Visit Completed' : rawStatus
+  const initialSearch = searchParams.get('search') || ''
+
   const [visits, setVisits] = useState<VisitRow[]>([...MOCK_VISITS])
   const [view, setView] = useState<'list' | 'assign'>('list')
   const [selectedVisit, setSelectedVisit] = useState<VisitRow | null>(null)
   const [executingVisit, setExecutingVisit] = useState<VisitRow | null>(null)
 
   // Filters (search handled by DataTable)
-  const [fStatus, setFStatus] = useState<string>('')
+  const [fStatus, setFStatus] = useState<string>(initialStatus)
   const [fAgent, setFAgent] = useState<string>('')
+
+  useEffect(() => {
+    if (rawStatus) {
+      setFStatus(rawStatus.toUpperCase() === 'COMPLETED' ? 'Visit Completed' : rawStatus)
+    }
+  }, [rawStatus])
 
   // Form State
   const [formAgentId, setFormAgentId] = useState<string>('u3')
@@ -407,6 +419,7 @@ export default function VisitsPage() {
               columns={visitColumns}
               data={filteredVisits}
               totalCount={visits.length}
+              initialSearch={initialSearch}
               rowKey={(v) => v.id}
               rowClassName={(v) => (v.status === 'Submitted' ? 'bg-orange-50/20' : '')}
               searchFields={[
@@ -766,3 +779,18 @@ export default function VisitsPage() {
     </AppLayout>
   )
 }
+
+export default function VisitsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen text-slate-400 text-sm">
+          Loading Visits…
+        </div>
+      }
+    >
+      <VisitsContent />
+    </Suspense>
+  )
+}
+

@@ -25,7 +25,8 @@
  * - Save & Cancel buttons.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Plus, Search, RefreshCw, ArrowLeft, ClipboardList, MapPin,
@@ -104,14 +105,30 @@ function ShortLocBadge({ code, onRemove }: { code: string; onRemove?: () => void
 
 // ── Main Page Component ───────────────────────────────────────────────────────
 
-export default function RequirementsPage() {
+function RequirementsContent() {
+  const searchParams = useSearchParams()
+  const initialStatus = searchParams.get('status') || ''
+  const initialSearch = searchParams.get('search') || ''
+
   const [requirements, setRequirements] = useState<FullRequirementRow[]>([...MOCK_REQUIREMENTS])
   const [view, setView] = useState<'list' | 'add'>('list')
 
   // List Filters
   const [fCategory, setFCategory] = useState('')
-  const [fStatus, setFStatus] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [fStatus, setFStatus] = useState(initialStatus)
+  const [searchQuery, setSearchQuery] = useState(initialSearch)
+
+  useEffect(() => {
+    if (initialStatus) {
+      setFStatus(initialStatus)
+    }
+  }, [initialStatus])
+
+  useEffect(() => {
+    if (initialSearch) {
+      setSearchQuery(initialSearch)
+    }
+  }, [initialSearch])
 
   // Add Form State
   const [formClientId, setFormClientId] = useState('p4')
@@ -146,7 +163,13 @@ export default function RequirementsPage() {
   const filteredRequirements = useMemo(() => {
     return requirements.filter((req) => {
       if (fCategory && req.category !== fCategory) return false
-      if (fStatus && req.status !== fStatus) return false
+      if (fStatus) {
+        if (fStatus === 'ACTIVE') {
+          if (req.status !== 'ACTIVE' && req.status !== 'Active') return false
+        } else if (req.status !== fStatus) {
+          return false
+        }
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
         const matchId = req.id.toLowerCase().includes(q)
@@ -968,3 +991,18 @@ export default function RequirementsPage() {
     </AppLayout>
   )
 }
+
+export default function RequirementsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen text-slate-400 text-sm">
+          Loading Requirements…
+        </div>
+      }
+    >
+      <RequirementsContent />
+    </Suspense>
+  )
+}
+

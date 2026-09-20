@@ -14,6 +14,7 @@
  */
 
 import { useState } from 'react'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import {
   MapPin, Navigation, CheckSquare, FileWarning, Star,
@@ -119,61 +120,81 @@ export function FieldAgentDashboard() {
 
       {/* ── Stats row ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
-                Today&apos;s Visits
-              </p>
-              <p className="text-2xl font-bold text-blue-700">{myVisits.length}</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <MapPin size={20} />
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/visits" className="block group no-underline">
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md hover:border-blue-300 hover:bg-slate-50/70 cursor-pointer">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide group-hover:text-blue-600 transition-colors">
+                    Today&apos;s Visits
+                  </p>
+                  <ArrowRight size={11} className="text-slate-300 group-hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-2xl font-bold text-blue-700">{myVisits.length}</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-100 transition-all">
+                <MapPin size={20} />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
-                Week Completed
-              </p>
-              <p className="text-2xl font-bold text-emerald-700">6</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckSquare size={20} />
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/visits?status=COMPLETED" className="block group no-underline">
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md hover:border-emerald-300 hover:bg-slate-50/70 cursor-pointer">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide group-hover:text-emerald-600 transition-colors">
+                    Week Completed
+                  </p>
+                  <ArrowRight size={11} className="text-slate-300 group-hover:text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-2xl font-bold text-emerald-700">6</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-emerald-100 transition-all">
+                <CheckSquare size={20} />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
-                Pending Reports
-              </p>
-              <p className="text-2xl font-bold text-amber-700">1</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <FileWarning size={20} />
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/visits/review" className="block group no-underline">
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md hover:border-amber-300 hover:bg-slate-50/70 cursor-pointer">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide group-hover:text-amber-600 transition-colors">
+                    Pending Reports
+                  </p>
+                  <ArrowRight size={11} className="text-slate-300 group-hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-2xl font-bold text-amber-700">1</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-100 transition-all">
+                <FileWarning size={20} />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
-                Agent Rating
-              </p>
-              <p className="text-2xl font-bold text-amber-600">4.8 ★</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Star size={20} />
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/visits" className="block group no-underline">
+          <Card className="border-slate-200 shadow-sm transition-all duration-200 hover:shadow-md hover:border-amber-300 hover:bg-slate-50/70 cursor-pointer">
+            <CardContent className="flex items-center justify-between p-4">
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide group-hover:text-amber-600 transition-colors">
+                    Agent Rating
+                  </p>
+                  <ArrowRight size={11} className="text-slate-300 group-hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-2xl font-bold text-amber-600">4.8 ★</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 group-hover:bg-amber-100 transition-all">
+                <Star size={20} />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* ── Live Location Map (PART 2 Spec Requirement 2 & 3) ──────────────── */}

@@ -18,7 +18,8 @@
  * - Save & Cancel buttons.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import {
   Plus, ArrowLeft, Building2, MapPin,
@@ -60,6 +61,7 @@ const CATEGORY_OPTIONS = [
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Status' },
+  { value: 'ACTIVE', label: 'Active Inventory' },
   { value: 'NEW', label: 'New' },
   { value: 'AVAILABLE', label: 'Available' },
   { value: 'UNDER_NEGOTIATION', label: 'Under Negotiation' },
@@ -96,13 +98,23 @@ function ShortLocBadge({ code, className = '' }: { code: string; className?: str
 
 // ── Main Page Component ───────────────────────────────────────────────────────
 
-export default function InventoryPage() {
+function InventoryContent() {
+  const searchParams = useSearchParams()
+  const initialStatus = searchParams.get('status') || ''
+  const initialSearch = searchParams.get('search') || ''
+
   const [properties, setProperties] = useState<PropertyRow[]>([...MOCK_PROPERTIES])
   const [view, setView] = useState<'list' | 'add'>('list')
 
   // List View Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('')
-  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus)
+
+  useEffect(() => {
+    if (initialStatus) {
+      setStatusFilter(initialStatus)
+    }
+  }, [initialStatus])
 
   // View Details Modal / Preview
   const [selectedProperty, setSelectedProperty] = useState<PropertyRow | null>(null)
@@ -418,7 +430,9 @@ export default function InventoryPage() {
       if (categoryFilter && prop.category !== categoryFilter) return false
       if (statusFilter) {
         if (statusFilter === 'SOLD_RENTED_LEASED') {
-          if (!['SOLD', 'RENTED', 'LEASED'].includes(prop.status)) return false
+          if (!['SOLD', 'RENTED', 'LEASED', 'Sold', 'Rented', 'Leased'].includes(prop.status)) return false
+        } else if (statusFilter === 'ACTIVE') {
+          if (['SOLD', 'RENTED', 'LEASED', 'WITHDRAWN', 'Sold', 'Rented', 'Leased', 'Withdrawn'].includes(prop.status)) return false
         } else if (prop.status !== statusFilter) {
           return false
         }
@@ -701,6 +715,7 @@ export default function InventoryPage() {
               columns={inventoryColumns}
               data={filteredProperties}
               totalCount={properties.length}
+              initialSearch={initialSearch}
               rowKey={(row) => row.id}
               searchFields={[
                 (r) => r.id,
@@ -1589,5 +1604,19 @@ export default function InventoryPage() {
         </div>
       )}
     </AppLayout>
+  )
+}
+
+export default function InventoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen text-slate-400 text-sm">
+          Loading Inventory…
+        </div>
+      }
+    >
+      <InventoryContent />
+    </Suspense>
   )
 }

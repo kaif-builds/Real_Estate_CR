@@ -12,7 +12,9 @@
  */
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Bell, Building2, ClipboardList, Users } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { AlertTriangle, Bell, Building2, ClipboardList, Users, ArrowRight, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -65,32 +67,64 @@ interface OfficeDashboardData {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, icon: Icon, accent = false, danger = false,
+  label, value, icon: Icon, accent = false, danger = false, href,
 }: {
-  label: string; value: number; icon: React.ElementType; accent?: boolean; danger?: boolean
+  label: string; value: number; icon: React.ElementType; accent?: boolean; danger?: boolean; href?: string
 }) {
-  return (
-    <Card>
+  const innerCard = (
+    <Card className={`transition-all duration-200 ${
+      href
+        ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 hover:bg-slate-50/70 group border-slate-200'
+        : 'border-slate-200'
+    }`}>
       <CardContent className="flex items-center justify-between p-5">
         <div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
-          <p className={`text-3xl font-bold ${danger ? 'text-red-600' : accent ? 'text-amber-600' : 'text-slate-900'}`}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide group-hover:text-indigo-600 transition-colors">
+              {label}
+            </p>
+            {href && (
+              <ArrowRight size={11} className="text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all opacity-0 group-hover:opacity-100" />
+            )}
+          </div>
+          <p className={`text-3xl font-bold transition-colors ${
+            danger
+              ? 'text-red-600 group-hover:text-red-700'
+              : accent
+              ? 'text-amber-600 group-hover:text-amber-700'
+              : 'text-slate-900 group-hover:text-indigo-950'
+          }`}>
             {value}
           </p>
         </div>
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-          danger ? 'bg-red-100 text-red-600' : accent ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all group-hover:scale-110 ${
+          danger
+            ? 'bg-red-100 text-red-600 group-hover:bg-red-200/80'
+            : accent
+            ? 'bg-amber-100 text-amber-600 group-hover:bg-amber-200/80'
+            : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-100 group-hover:text-indigo-600'
         }`}>
           <Icon size={24} />
         </div>
       </CardContent>
     </Card>
   )
+
+  if (href) {
+    return (
+      <Link href={href} className="block no-underline">
+        {innerCard}
+      </Link>
+    )
+  }
+
+  return innerCard
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function OfficeExecutiveDashboard() {
+  const router = useRouter()
   const [data, setData] = useState<OfficeDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -225,15 +259,37 @@ export function OfficeExecutiveDashboard() {
 
       {/* ── Summary cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard label="Active Leads"        value={summary.active_leads}        icon={Users}        />
-        <StatCard label="Active Requirements" value={summary.active_requirements} icon={ClipboardList} />
-        <StatCard label="Active Inventory"    value={summary.active_inventory}    icon={Building2}    />
-        <StatCard label="Pending Follow-ups"  value={summary.pending_follow_ups}  icon={Bell}   accent />
+        <StatCard
+          label="Active Leads"
+          value={summary.active_leads}
+          icon={Users}
+          href="/leads?status=ACTIVE"
+        />
+        <StatCard
+          label="Active Requirements"
+          value={summary.active_requirements}
+          icon={ClipboardList}
+          href="/requirements?status=ACTIVE"
+        />
+        <StatCard
+          label="Active Inventory"
+          value={summary.active_inventory}
+          icon={Building2}
+          href="/inventory?status=ACTIVE"
+        />
+        <StatCard
+          label="Pending Follow-ups"
+          value={summary.pending_follow_ups}
+          icon={Bell}
+          accent
+          href="/follow-ups?status=PENDING"
+        />
         <StatCard
           label="Overdue Follow-ups"
           value={summary.overdue_follow_ups}
           icon={AlertTriangle}
           danger={summary.overdue_follow_ups > 0}
+          href="/follow-ups?status=OVERDUE"
         />
       </div>
 
@@ -265,8 +321,16 @@ export function OfficeExecutiveDashboard() {
                 </thead>
                 <tbody>
                   {todays_queue.map((row, i) => (
-                    <tr key={row.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`}>
-                      <td className="px-6 py-3 font-medium text-slate-800">{row.client_name}</td>
+                    <tr
+                      key={row.id}
+                      onClick={() => router.push(`/follow-ups?search=${encodeURIComponent(row.client_name)}`)}
+                      className={`border-b border-slate-50 hover:bg-indigo-50/60 transition-colors cursor-pointer group ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`}
+                      title={`Click to view follow-ups for ${row.client_name}`}
+                    >
+                      <td className="px-6 py-3 font-medium text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                        <span>{row.client_name}</span>
+                        <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{row.type}</td>
                       <td className="px-4 py-3 text-slate-600 max-w-[200px] truncate">{row.purpose}</td>
                       <td className="px-4 py-3">
@@ -321,9 +385,17 @@ export function OfficeExecutiveDashboard() {
                 </thead>
                 <tbody>
                   {stale_records.map((row, i) => (
-                    <tr key={row.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`}>
-                      <td className="px-6 py-3 font-mono text-xs font-medium text-slate-700">{row.id}</td>
-                      <td className="px-4 py-3 text-slate-800">{row.name}</td>
+                    <tr
+                      key={row.id}
+                      onClick={() => router.push(`/inventory?search=${encodeURIComponent(row.id)}`)}
+                      className={`border-b border-slate-50 hover:bg-amber-50/60 transition-colors cursor-pointer group ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`}
+                      title={`Click to inspect property ${row.id} in Inventory`}
+                    >
+                      <td className="px-6 py-3 font-mono text-xs font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                        <span>{row.id}</span>
+                        <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
+                      </td>
+                      <td className="px-4 py-3 text-slate-800 group-hover:text-indigo-900 transition-colors">{row.name}</td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700">
                           {row.status}
