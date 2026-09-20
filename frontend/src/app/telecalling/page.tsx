@@ -858,7 +858,7 @@ export default function TelecallingPage() {
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".mp3,.m4a,.wav,.webm,audio/*"
+                        accept="audio/mpeg,audio/mp4,audio/wav,audio/webm,.mp3,.m4a,.wav,.webm"
                         className="hidden"
                         onChange={(e) => {
                           const f = e.target.files?.[0]
