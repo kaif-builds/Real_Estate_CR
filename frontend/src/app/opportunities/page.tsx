@@ -7,7 +7,7 @@
  * and deal closing actions (Close as Won / Close as Lost).
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   GitBranch, Plus, Search, RefreshCw, MapPin, DollarSign,
   User, Calendar, Clock, CheckCircle2, XCircle, ArrowRight,
@@ -51,19 +51,35 @@ const LOST_REASONS = [
 
 function ShortLocBadge({ code }: { code: string }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-semibold bg-indigo-50 text-indigo-900 border border-indigo-200">
+    <span
+      title={code}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-semibold bg-indigo-50 text-indigo-900 border border-indigo-200 max-w-full overflow-hidden"
+    >
       <MapPin size={11} className="text-indigo-600 shrink-0" />
-      <span>{code}</span>
+      <span className="truncate">{code}</span>
     </span>
   )
 }
 
 export default function OpportunitiesPage() {
+  const boardRef = useRef<HTMLDivElement>(null)
   const [opportunities, setOpportunities] = useState<PipelineOpportunityRow[]>([
     ...MOCK_PIPELINE_OPPORTUNITIES,
   ])
   const [selectedOpp, setSelectedOpp] = useState<PipelineOpportunityRow | null>(null)
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false)
+
+  // Auto-scroll board if requested (e.g. ?scroll=end)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('scroll=end')) {
+      const timer = setTimeout(() => {
+        if (boardRef.current) {
+          boardRef.current.scrollLeft = 850
+        }
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [])
 
   // Deal Closure Forms inside right panel
   const [closingMode, setClosingMode] = useState<'none' | 'won' | 'lost'>('none')
@@ -205,134 +221,136 @@ export default function OpportunitiesPage() {
         {/* ───────────────────────────────────────────────────────────────── */}
         {/* 7-COLUMN KANBAN BOARD                                             */}
         {/* ───────────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-3.5 items-start overflow-x-auto pb-6">
-          {PIPELINE_COLUMNS.map((col) => {
-            const columnOpps = filteredOpps.filter((o) => o.stage === col.id)
-            const columnTotalValue = columnOpps.reduce((sum, o) => sum + o.expected_value, 0)
+        <div ref={boardRef} className="w-full overflow-x-auto pb-6 pt-1">
+          <div className="flex gap-4 items-start min-w-max">
+            {PIPELINE_COLUMNS.map((col) => {
+              const columnOpps = filteredOpps.filter((o) => o.stage === col.id)
+              const columnTotalValue = columnOpps.reduce((sum, o) => sum + o.expected_value, 0)
 
-            return (
-              <div
-                key={col.id}
-                className="bg-slate-50/80 rounded-xl border border-slate-200/80 p-2.5 space-y-3 min-w-[210px]"
-              >
-                {/* Column Header */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="space-y-0.5">
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                      {col.label}
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-semibold font-mono">
-                      ₹{(columnTotalValue / 100000).toFixed(1)}L
-                    </p>
+              return (
+                <div
+                  key={col.id}
+                  className="w-[285px] min-w-[285px] shrink-0 bg-slate-50/80 rounded-xl border border-slate-200/80 p-3 space-y-3"
+                >
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between px-1">
+                    <div className="space-y-0.5">
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                        {col.label}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-semibold font-mono">
+                        ₹{(columnTotalValue / 100000).toFixed(1)}L
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="bg-white border text-slate-700 font-bold text-xs h-5 px-1.5"
+                    >
+                      {columnOpps.length}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant="secondary"
-                    className="bg-white border text-slate-700 font-bold text-xs h-5 px-1.5"
-                  >
-                    {columnOpps.length}
-                  </Badge>
-                </div>
 
-                {/* Cards Container */}
-                <div className="space-y-2.5 min-h-[350px]">
-                  {columnOpps.map((opp) => {
-                    const isWon = opp.stage === 'WON'
-                    const isLost = opp.stage === 'LOST'
+                  {/* Cards Container */}
+                  <div className="space-y-2.5 min-h-[350px]">
+                    {columnOpps.map((opp) => {
+                      const isWon = opp.stage === 'WON'
+                      const isLost = opp.stage === 'LOST'
 
-                    return (
-                      <Card
-                        key={opp.id}
-                        onClick={() => {
-                          setSelectedOpp(opp)
-                          setClosingMode('none')
-                          setTxnValue(opp.expected_value.toString())
-                        }}
-                        className={`cursor-pointer transition-all hover:shadow-md border border-slate-200/90 shadow-2xs ${
-                          isWon
-                            ? 'border-l-4 border-l-emerald-500 bg-emerald-50/20'
-                            : isLost
-                            ? 'opacity-70 bg-slate-100/60 border-slate-200'
-                            : 'bg-white hover:border-indigo-300'
-                        }`}
-                      >
-                        <CardContent className="p-3 space-y-2">
-                          {/* Top row: ID & Agent Avatar */}
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-[11px] font-bold text-slate-700">
-                              {opp.id}
-                            </span>
-                            <div
-                              title={opp.agent_name}
-                              className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center justify-center text-[10px] font-bold"
-                            >
-                              {opp.agent_name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')}
-                            </div>
-                          </div>
-
-                          {/* Property ShortLoc */}
-                          <div>
-                            <ShortLocBadge code={opp.property_short_loc} />
-                          </div>
-
-                          {/* Client Name */}
-                          <p className="text-xs font-semibold text-slate-900 truncate">
-                            {opp.client_name}
-                          </p>
-
-                          {/* Expected Value */}
-                          <div className="text-xs font-bold text-slate-900">
-                            {formatPrice(opp.expected_value)}
-                          </div>
-
-                          {/* Probability Bar */}
-                          <div className="space-y-1 pt-1 border-t border-slate-100">
-                            <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
-                              <span>Probability</span>
-                              <span
-                                className={
-                                  isWon
-                                    ? 'text-emerald-700 font-bold'
-                                    : isLost
-                                    ? 'text-rose-700'
-                                    : 'text-indigo-700'
-                                }
-                              >
-                                {opp.probability}%
+                      return (
+                        <Card
+                          key={opp.id}
+                          onClick={() => {
+                            setSelectedOpp(opp)
+                            setClosingMode('none')
+                            setTxnValue(opp.expected_value.toString())
+                          }}
+                          className={`cursor-pointer transition-all hover:shadow-md border border-slate-200/90 shadow-2xs ${
+                            isWon
+                              ? 'border-l-4 border-l-emerald-500 bg-emerald-50/20'
+                              : isLost
+                              ? 'opacity-70 bg-slate-100/60 border-slate-200'
+                              : 'bg-white hover:border-indigo-300'
+                          }`}
+                        >
+                          <CardContent className="p-3.5 space-y-2.5">
+                            {/* Top row: ID & Agent Avatar with dedicated header row and spacing */}
+                            <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100">
+                              <span className="font-mono text-[11px] font-bold text-slate-700">
+                                {opp.id}
                               </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${
-                                  isWon
-                                    ? 'bg-emerald-500'
-                                    : isLost
-                                    ? 'bg-rose-400'
-                                    : 'bg-indigo-600'
-                                }`}
-                                style={{ width: `${opp.probability}%` }}
-                              />
+                                title={`Assigned: ${opp.agent_name}`}
+                                className="w-6 h-6 shrink-0 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center justify-center text-[10px] font-bold shadow-2xs"
+                              >
+                                {opp.agent_name
+                                  .split(' ')
+                                  .map((n) => n[0])
+                                  .join('')}
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Lost Reason Tag if stage is Lost */}
-                          {isLost && opp.lost_reason && (
-                            <div className="pt-1">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 text-slate-700 border border-slate-300">
-                                {opp.lost_reason}
-                              </span>
+                            {/* Property ShortLoc */}
+                            <div className="pt-0.5 overflow-hidden">
+                              <ShortLocBadge code={opp.property_short_loc} />
                             </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+
+                            {/* Client Name */}
+                            <p className="text-xs font-semibold text-slate-900 truncate">
+                              {opp.client_name}
+                            </p>
+
+                            {/* Expected Value */}
+                            <div className="text-xs font-bold text-slate-900">
+                              {formatPrice(opp.expected_value)}
+                            </div>
+
+                            {/* Probability Bar */}
+                            <div className="space-y-1 pt-1 border-t border-slate-100">
+                              <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                                <span>Probability</span>
+                                <span
+                                  className={
+                                    isWon
+                                      ? 'text-emerald-700 font-bold'
+                                      : isLost
+                                      ? 'text-rose-700'
+                                      : 'text-indigo-700'
+                                  }
+                                >
+                                  {opp.probability}%
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    isWon
+                                      ? 'bg-emerald-500'
+                                      : isLost
+                                      ? 'bg-rose-400'
+                                      : 'bg-indigo-600'
+                                  }`}
+                                  style={{ width: `${opp.probability}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Lost Reason Tag if stage is Lost */}
+                            {isLost && opp.lost_reason && (
+                              <div className="pt-1">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200/80 text-slate-700 border border-slate-300">
+                                  {opp.lost_reason}
+                                </span>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
 
         {/* ───────────────────────────────────────────────────────────────── */}

@@ -259,6 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (typeof window !== 'undefined') {
         const stored = sessionStorage.getItem(SESSION_STORAGE_KEY)
+        const loggedOut = sessionStorage.getItem('propdesk_logged_out') === 'true'
         if (stored) {
           const parsed: MockUser = JSON.parse(stored)
           if (parsed && parsed.id && parsed.email && parsed.role) {
@@ -268,6 +269,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               startTracking()
             }
           }
+        } else if (!loggedOut && pathname !== '/login') {
+          // Default to Super Admin in mock environment for direct deep-link navigation
+          const defaultUser: MockUser = {
+            id: MOCK_USERS[0].id,
+            email: MOCK_USERS[0].email,
+            name: MOCK_USERS[0].name,
+            role: MOCK_USERS[0].role as MockRole,
+          }
+          sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(defaultUser))
+          setUserState(defaultUser)
+          setMockUser(defaultUser)
         }
       }
     } catch {
@@ -409,6 +421,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Logout Handler ──────────────────────────────────────────────────────────
 
   const logout = () => {
+    sessionStorage.setItem('propdesk_logged_out', 'true')
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
     stopTracking()
     setUserState(null)
