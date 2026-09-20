@@ -36,13 +36,14 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  Plus, Search, RefreshCw, ArrowLeft, MapPin, Calendar, Clock,
+  Plus, ArrowLeft, MapPin, Calendar, Clock,
   UserCheck, Building2, ClipboardCheck, CheckCircle2, AlertCircle,
   Eye, FileText, ChevronRight, Sparkles, X, Play
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { VisitExecutionModal } from '@/components/visits/VisitExecutionModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -145,10 +146,9 @@ export default function VisitsPage() {
   const [selectedVisit, setSelectedVisit] = useState<VisitRow | null>(null)
   const [executingVisit, setExecutingVisit] = useState<VisitRow | null>(null)
 
-  // Filters
+  // Filters (search handled by DataTable)
   const [fStatus, setFStatus] = useState<string>('')
   const [fAgent, setFAgent] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState<string>('')
 
   // Form State
   const [formAgentId, setFormAgentId] = useState<string>('u3')
@@ -166,25 +166,15 @@ export default function VisitsPage() {
     return MOCK_USERS.filter((u) => u.role === 'AGENT')
   }, [])
 
-  // ── Filtered Visits ─────────────────────────────────────────────────────────
+  // ── Filtered Visits (page-specific filters only — search in DataTable) ───────
 
   const filteredVisits = useMemo(() => {
     return visits.filter((v) => {
       if (fStatus && v.status !== fStatus) return false
       if (fAgent && v.agent_name !== fAgent) return false
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const matchId = v.id.toLowerCase().includes(q)
-        const matchProp = v.property_short_loc.toLowerCase().includes(q)
-        const matchClient = v.client_name.toLowerCase().includes(q)
-        const matchAgent = v.agent_name.toLowerCase().includes(q)
-        if (!matchId && !matchProp && !matchClient && !matchAgent) return false
-      }
-
       return true
     })
-  }, [visits, fStatus, fAgent, searchQuery])
+  }, [visits, fStatus, fAgent])
 
   // ── Assign Form Handlers ────────────────────────────────────────────────────
 
@@ -225,6 +215,143 @@ export default function VisitsPage() {
     resetForm()
     setView('list')
   }
+
+  // ── Column Definitions for DataTable ────────────────────────────────────────
+
+  const visitColumns: ColumnDef<VisitRow>[] = useMemo(
+    () => [
+      {
+        key: 'id',
+        header: 'Visit ID',
+        sortValue: (v) => v.id,
+        render: (v) => (
+          <span className="font-mono text-xs font-semibold text-slate-800 whitespace-nowrap">
+            {v.id}
+          </span>
+        ),
+      },
+      {
+        key: 'property',
+        header: 'Property',
+        sortValue: (v) => v.property_short_loc,
+        render: (v) => (
+          <div className="space-y-0.5 whitespace-nowrap">
+            <ShortLocBadge code={v.property_short_loc} />
+            <div className="text-[10px] font-mono text-slate-400">
+              ID: {v.property_id}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'client',
+        header: 'Client / Party',
+        sortValue: (v) => v.client_name,
+        render: (v) => (
+          <span className="font-semibold text-slate-900 whitespace-nowrap">
+            {v.client_name}
+          </span>
+        ),
+      },
+      {
+        key: 'agent',
+        header: 'Assigned Agent',
+        sortValue: (v) => v.agent_name,
+        render: (v) => (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 whitespace-nowrap">
+            <UserCheck size={13} className="text-slate-400" />
+            {v.agent_name}
+          </span>
+        ),
+      },
+      {
+        key: 'purpose',
+        header: 'Purpose',
+        sortValue: (v) => v.purpose,
+        render: (v) => (
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border whitespace-nowrap ${getPurposeBadge(
+              v.purpose
+            )}`}
+          >
+            {v.purpose}
+          </span>
+        ),
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortValue: (v) => v.status,
+        render: (v) => (
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap ${getVisitStatusBadge(
+              v.status
+            )}`}
+          >
+            {v.status}
+          </span>
+        ),
+      },
+      {
+        key: 'scheduled_date',
+        header: 'Scheduled Date',
+        sortValue: (v) => (v.scheduled_date ? new Date(v.scheduled_date).getTime() : 0),
+        render: (v) => (
+          <span className="text-xs text-slate-600 whitespace-nowrap">
+            {formatDateTime(v.scheduled_date)}
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        header: 'Actions',
+        align: 'right',
+        sortable: false,
+        render: (v) => {
+          const isSubmitted = v.status === 'Submitted'
+          return (
+            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+              {isSubmitted ? (
+                <Link href={`/visits/review?id=${v.id}`}>
+                  <Button
+                    size="sm"
+                    className="h-7 px-2.5 text-xs bg-orange-600 hover:bg-orange-700 text-white shadow-xs font-bold"
+                  >
+                    <ClipboardCheck size={12} className="mr-1" />
+                    Review
+                  </Button>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-1.5 justify-end">
+                  {v.status !== 'Approved' &&
+                    v.status !== 'Rejected' &&
+                    v.status !== 'Cancelled' && (
+                      <Button
+                        size="sm"
+                        onClick={() => setExecutingVisit(v)}
+                        className="h-7 px-2 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                      >
+                        <Play size={11} className="mr-1 fill-current" />
+                        Arrival
+                      </Button>
+                    )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedVisit(v)}
+                    className="h-7 px-2.5 text-xs text-slate-700 border-slate-200 hover:bg-slate-50"
+                  >
+                    View
+                  </Button>
+                </div>
+              )}
+            </div>
+          )
+        },
+      },
+    ],
+    []
+  )
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -275,30 +402,34 @@ export default function VisitsPage() {
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <Card className="border-slate-200/80 shadow-xs">
-              <CardContent className="p-4 flex flex-wrap items-center gap-3">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[220px] max-w-sm">
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                  <Input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by ID, property, client, or agent..."
-                    className="pl-9 text-sm h-9"
-                  />
-                </div>
-
-                {/* Status Dropdown */}
-                <div className="w-full sm:w-auto min-w-[170px]">
+            {/* DataTable with sorting, search, and page-specific filters */}
+            <DataTable<VisitRow>
+              columns={visitColumns}
+              data={filteredVisits}
+              totalCount={visits.length}
+              rowKey={(v) => v.id}
+              rowClassName={(v) => (v.status === 'Submitted' ? 'bg-orange-50/20' : '')}
+              searchFields={[
+                (v) => v.id,
+                (v) => v.property_short_loc,
+                (v) => v.client_name,
+                (v) => v.agent_name,
+              ]}
+              searchPlaceholder="Search by ID, property, client, or agent…"
+              hasActiveFilters={!!fStatus || !!fAgent}
+              onClearFilters={() => {
+                setFStatus('')
+                setFAgent('')
+              }}
+              emptyIcon={<MapPin className="h-12 w-12" />}
+              emptyTitle="No visits found"
+              emptyDescription="No visits match the current filter parameters."
+              filterSlot={
+                <>
                   <Select
                     value={fStatus}
                     onChange={(e) => setFStatus(e.target.value)}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm min-w-[170px]"
                   >
                     {VISIT_STATUS_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -306,14 +437,10 @@ export default function VisitsPage() {
                       </option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Agent Dropdown (Only Agents, No Office Executives) */}
-                <div className="w-full sm:w-auto min-w-[170px]">
                   <Select
                     value={fAgent}
                     onChange={(e) => setFAgent(e.target.value)}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm min-w-[170px]"
                   >
                     <option value="">All Field Agents</option>
                     {agentUsers.map((agent) => (
@@ -322,172 +449,9 @@ export default function VisitsPage() {
                       </option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Reset Filters */}
-                {(fStatus || fAgent || searchQuery) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFStatus('')
-                      setFAgent('')
-                      setSearchQuery('')
-                    }}
-                    className="text-slate-500 hover:text-slate-800 h-9 px-2.5"
-                    title="Clear filters"
-                  >
-                    <RefreshCw size={14} className="mr-1.5" />
-                    Reset
-                  </Button>
-                )}
-
-                <div className="ml-auto text-xs text-slate-400 font-medium">
-                  Showing {filteredVisits.length} of {visits.length} visits
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Visits Table */}
-            <Card className="border-slate-200/80 shadow-xs overflow-hidden">
-              <CardContent className="p-0">
-                {filteredVisits.length === 0 ? (
-                  <div className="text-center py-16 px-4">
-                    <MapPin className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                    <h3 className="text-base font-semibold text-slate-800">No visits found</h3>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                      No visits match the current filter parameters. Try clearing filters or assign a new visit.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200/80 bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                          <th className="py-3 px-4">Visit ID</th>
-                          <th className="py-3 px-4">Property</th>
-                          <th className="py-3 px-4">Client / Party</th>
-                          <th className="py-3 px-4">Assigned Agent</th>
-                          <th className="py-3 px-4">Purpose</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4">Scheduled Date</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredVisits.map((visit) => {
-                          const isSubmitted = visit.status === 'Submitted'
-
-                          return (
-                            <tr
-                              key={visit.id}
-                              className={`hover:bg-slate-50/80 transition-colors group ${
-                                isSubmitted ? 'bg-orange-50/20' : ''
-                              }`}
-                            >
-                              {/* Visit ID */}
-                              <td className="py-3.5 px-4 font-mono text-xs font-semibold text-slate-800 whitespace-nowrap">
-                                {visit.id}
-                              </td>
-
-                              {/* Property (ShortLoc Badge) */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <div className="space-y-0.5">
-                                  <ShortLocBadge code={visit.property_short_loc} />
-                                  <div className="text-[10px] font-mono text-slate-400">
-                                    ID: {visit.property_id}
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* Client / Party */}
-                              <td className="py-3.5 px-4 font-semibold text-slate-900 whitespace-nowrap">
-                                {visit.client_name}
-                              </td>
-
-                              {/* Assigned Agent */}
-                              <td className="py-3.5 px-4 text-xs font-medium text-slate-700 whitespace-nowrap">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <UserCheck size={13} className="text-slate-400" />
-                                  {visit.agent_name}
-                                </span>
-                              </td>
-
-                              {/* Purpose Badge */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${getPurposeBadge(
-                                    visit.purpose
-                                  )}`}
-                                >
-                                  {visit.purpose}
-                                </span>
-                              </td>
-
-                              {/* Status Badge */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getVisitStatusBadge(
-                                    visit.status
-                                  )}`}
-                                >
-                                  {visit.status}
-                                </span>
-                              </td>
-
-                              {/* Scheduled Date */}
-                              <td className="py-3.5 px-4 text-xs text-slate-600 whitespace-nowrap">
-                                {formatDateTime(visit.scheduled_date)}
-                              </td>
-
-                              {/* Actions */}
-                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {isSubmitted ? (
-                                    <Link href={`/visits/review?id=${visit.id}`}>
-                                      <Button
-                                        size="sm"
-                                        className="h-7 px-2.5 text-xs bg-orange-600 hover:bg-orange-700 text-white shadow-xs font-bold"
-                                      >
-                                        <ClipboardCheck size={12} className="mr-1" />
-                                        Review
-                                      </Button>
-                                    </Link>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5 justify-end">
-                                      {visit.status !== 'Approved' &&
-                                        visit.status !== 'Rejected' &&
-                                        visit.status !== 'Cancelled' && (
-                                          <Button
-                                            size="sm"
-                                            onClick={() => setExecutingVisit(visit)}
-                                            className="h-7 px-2 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
-                                          >
-                                            <Play size={11} className="mr-1 fill-current" />
-                                            Arrival
-                                          </Button>
-                                        )}
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setSelectedVisit(visit)}
-                                        className="h-7 px-2.5 text-xs text-slate-700 border-slate-200 hover:bg-slate-50"
-                                      >
-                                        View
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </>
+              }
+            />
           </>
         )}
 
