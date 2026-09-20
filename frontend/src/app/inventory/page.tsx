@@ -21,7 +21,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
-  Plus, Search, RefreshCw, ArrowLeft, Building2, MapPin,
+  Plus, ArrowLeft, Building2, MapPin,
   AlertTriangle, CheckCircle2, ShieldAlert, Sparkles, Home,
   LandPlot, Building, Eye, Edit3, X, Upload, Download,
   FileSpreadsheet, AlertCircle, CheckCircle, Loader2
@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import {
   formatPrice, formatDate, formatCategory, propertyStatusClasses,
 } from '@/lib/formatters'
@@ -102,7 +103,6 @@ export default function InventoryPage() {
   // List View Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState<string>('')
 
   // View Details Modal / Preview
   const [selectedProperty, setSelectedProperty] = useState<PropertyRow | null>(null)
@@ -387,17 +387,12 @@ export default function InventoryPage() {
     setUploadFileName('')
   }, [validRows])
 
-  // ── Filter Logic ────────────────────────────────────────────────────────────
 
+  // ── Filter Logic (category/status only — search is handled by DataTable) ──
 
   const filteredProperties = useMemo(() => {
     return properties.filter((prop) => {
-      // Category filter
-      if (categoryFilter && prop.category !== categoryFilter) {
-        return false
-      }
-
-      // Status filter
+      if (categoryFilter && prop.category !== categoryFilter) return false
       if (statusFilter) {
         if (statusFilter === 'SOLD_RENTED_LEASED') {
           if (!['SOLD', 'RENTED', 'LEASED'].includes(prop.status)) return false
@@ -405,23 +400,9 @@ export default function InventoryPage() {
           return false
         }
       }
-
-      // Text search: matches ID, ShortLoc, Address, Owner, or Category
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const matchId = prop.id.toLowerCase().includes(q)
-        const matchLoc = prop.short_loc.toLowerCase().includes(q)
-        const matchAddr = (prop.address || '').toLowerCase().includes(q)
-        const matchOwner = (prop.owner_name || '').toLowerCase().includes(q)
-        const matchCat = formatCategory(prop.category).toLowerCase().includes(q)
-        if (!matchId && !matchLoc && !matchAddr && !matchOwner && !matchCat) {
-          return false
-        }
-      }
-
       return true
     })
-  }, [properties, categoryFilter, statusFilter, searchQuery])
+  }, [properties, categoryFilter, statusFilter])
 
   // ── Last Verified Helper (5+ days highlight red) ───────────────────────────
 
@@ -527,6 +508,109 @@ export default function InventoryPage() {
     setView('list')
   }
 
+  // ── Column Definitions for DataTable ────────────────────────────────────────
+
+  const inventoryColumns: ColumnDef<PropertyRow>[] = [
+    {
+      key: 'id',
+      header: 'Property ID',
+      sortValue: (r) => r.id,
+      render: (r) => <span className="font-mono text-xs font-semibold text-slate-800">{r.id}</span>,
+    },
+    {
+      key: 'short_loc',
+      header: 'ShortLoc',
+      sortValue: (r) => r.short_loc,
+      render: (r) => (
+        <div>
+          <ShortLocBadge code={r.short_loc} />
+          {r.address && (
+            <p className="text-[11px] text-slate-400 truncate max-w-[200px] mt-0.5" title={r.address}>
+              {r.address}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      sortValue: (r) => formatCategory(r.category),
+      render: (r) => {
+        const cls = r.category.includes('RENTAL')
+          ? 'bg-blue-50 text-blue-700 border-blue-200/60'
+          : r.category.includes('PLOT')
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
+          : 'bg-purple-50 text-purple-700 border-purple-200/60'
+        return (
+          <Badge variant="secondary" className={`${cls} font-medium text-[11px]`}>
+            {formatCategory(r.category)}
+          </Badge>
+        )
+      },
+    },
+    {
+      key: 'price',
+      header: 'Price / Rent',
+      align: 'right',
+      sortValue: (r) => r.price,
+      render: (r) => (
+        <span className="font-semibold text-slate-900 whitespace-nowrap">
+          {formatPrice(r.price, r.category)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortValue: (r) => r.status,
+      render: (r) => (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${propertyStatusClasses(r.status)}`}>
+          {r.status.replace(/_/g, ' ')}
+        </span>
+      ),
+    },
+    {
+      key: 'last_verified',
+      header: 'Last Verified',
+      sortValue: (r) => r.last_verified_at ? new Date(r.last_verified_at).getTime() : 0,
+      render: (r) => {
+        const v = getVerificationStatus(r.last_verified_at)
+        if (v.isStale) {
+          return (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-red-50 text-red-700 border border-red-200 shadow-xs" title={`Last verified: ${formatDate(r.last_verified_at)}`}>
+              <AlertTriangle size={13} className="text-red-600 shrink-0" />
+              <span>{v.days !== null ? `${v.days}d ago (Stale)` : 'Never Verified'}</span>
+            </div>
+          )
+        }
+        return (
+          <div className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+            <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+            <span>{v.label}</span>
+            <span className="text-[11px] text-slate-400">({formatDate(r.last_verified_at)})</span>
+          </div>
+        )
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      sortable: false,
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => setSelectedProperty(r)} className="h-8 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-100">
+            <Eye size={12} className="mr-1 text-slate-400" />View
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSelectedProperty(r)} className="h-8 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-100">
+            <Edit3 size={12} className="mr-1 text-slate-400" />Edit
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -589,236 +673,48 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <Card className="border-slate-200/80 shadow-xs">
-              <CardContent className="p-4 flex flex-wrap items-center gap-3">
-                {/* Text Search */}
-                <div className="relative flex-1 min-w-[240px] max-w-md">
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                  <Input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by ID, ShortLoc, address, or owner..."
-                    className="pl-9 text-sm h-9"
-                  />
-                </div>
-
-                {/* Category Dropdown */}
-                <div className="w-full sm:w-auto min-w-[180px]">
+            {/* DataTable with sorting, search, and page-specific filters */}
+            <DataTable<PropertyRow>
+              columns={inventoryColumns}
+              data={filteredProperties}
+              totalCount={properties.length}
+              rowKey={(row) => row.id}
+              searchFields={[
+                (r) => r.id,
+                (r) => r.short_loc,
+                (r) => r.address,
+                (r) => r.owner_name,
+                (r) => formatCategory(r.category),
+              ]}
+              searchPlaceholder="Search by ID, ShortLoc, address, or owner…"
+              hasActiveFilters={!!categoryFilter || !!statusFilter}
+              onClearFilters={() => { setCategoryFilter(''); setStatusFilter('') }}
+              emptyIcon={<Building2 className="h-12 w-12" />}
+              emptyTitle="No properties found"
+              emptyDescription="No property listings match your current search and filter criteria."
+              filterSlot={
+                <>
                   <Select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm min-w-[160px]"
                   >
                     {CATEGORY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Status Dropdown */}
-                <div className="w-full sm:w-auto min-w-[180px]">
                   <Select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="h-9 text-sm"
+                    className="h-8 text-sm min-w-[160px]"
                   >
                     {STATUS_FILTER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </Select>
-                </div>
-
-                {/* Reset Filters */}
-                {(categoryFilter || statusFilter || searchQuery) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setCategoryFilter('')
-                      setStatusFilter('')
-                      setSearchQuery('')
-                    }}
-                    className="text-slate-500 hover:text-slate-800 h-9 px-2.5"
-                    title="Clear filters"
-                  >
-                    <RefreshCw size={14} className="mr-1.5" />
-                    Reset
-                  </Button>
-                )}
-
-                <div className="ml-auto text-xs text-slate-400 font-medium">
-                  Showing {filteredProperties.length} of {properties.length} properties
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Property Table */}
-            <Card className="border-slate-200/80 shadow-xs overflow-hidden">
-              <CardContent className="p-0">
-                {filteredProperties.length === 0 ? (
-                  <div className="text-center py-16 px-4">
-                    <Building2 className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                    <h3 className="text-base font-semibold text-slate-800">No properties found</h3>
-                    <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                      No property listings match your current search and filter criteria. Try clearing filters or add a new property.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setCategoryFilter('')
-                        setStatusFilter('')
-                        setSearchQuery('')
-                      }}
-                      className="mt-4"
-                    >
-                      Clear Filters
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200/80 bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                          <th className="py-3 px-4">Property ID</th>
-                          <th className="py-3 px-4">
-                            <span className="inline-flex items-center gap-1">
-                              <span>ShortLoc</span>
-                              <Badge variant="outline" className="text-[10px] py-0 px-1 font-normal uppercase text-indigo-600 border-indigo-200">
-                                Match Key
-                              </Badge>
-                            </span>
-                          </th>
-                          <th className="py-3 px-4">Category</th>
-                          <th className="py-3 px-4 text-right">Price / Rent</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4">Last Verified</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredProperties.map((prop) => {
-                          const vStatus = getVerificationStatus(prop.last_verified_at)
-
-                          return (
-                            <tr
-                              key={prop.id}
-                              className="hover:bg-slate-50/80 transition-colors group"
-                            >
-                              {/* Property ID */}
-                              <td className="py-3.5 px-4 font-mono text-xs font-semibold text-slate-800">
-                                {prop.id}
-                              </td>
-
-                              {/* ShortLoc (Visually Distinct Core Key) */}
-                              <td className="py-3.5 px-4">
-                                <ShortLocBadge code={prop.short_loc} />
-                                {prop.address && (
-                                  <p className="text-[11px] text-slate-400 truncate max-w-[200px] mt-0.5" title={prop.address}>
-                                    {prop.address}
-                                  </p>
-                                )}
-                              </td>
-
-                              {/* Category */}
-                              <td className="py-3.5 px-4">
-                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                                  {prop.category.includes('RENTAL') ? (
-                                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200/60 font-medium text-[11px]">
-                                      {formatCategory(prop.category)}
-                                    </Badge>
-                                  ) : prop.category.includes('PLOT') ? (
-                                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200/60 font-medium text-[11px]">
-                                      {formatCategory(prop.category)}
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200/60 font-medium text-[11px]">
-                                      {formatCategory(prop.category)}
-                                    </Badge>
-                                  )}
-                                </span>
-                              </td>
-
-                              {/* Price / Rent */}
-                              <td className="py-3.5 px-4 text-right font-semibold text-slate-900 whitespace-nowrap">
-                                {formatPrice(prop.price, prop.category)}
-                              </td>
-
-                              {/* Status Badge */}
-                              <td className="py-3.5 px-4">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${propertyStatusClasses(
-                                    prop.status
-                                  )}`}
-                                >
-                                  {prop.status.replace(/_/g, ' ')}
-                                </span>
-                              </td>
-
-                              {/* Last Verified (Highlight RED if 5+ days old) */}
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                {vStatus.isStale ? (
-                                  <div
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-red-50 text-red-700 border border-red-200 shadow-xs"
-                                    title={`Needs reverification! Last verified: ${formatDate(prop.last_verified_at)}`}
-                                  >
-                                    <AlertTriangle size={13} className="text-red-600 shrink-0" />
-                                    <span>
-                                      {vStatus.days !== null ? `${vStatus.days}d ago (Stale)` : 'Never Verified'}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <div className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-                                    <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                                    <span>{vStatus.label}</span>
-                                    <span className="text-[11px] text-slate-400">
-                                      ({formatDate(prop.last_verified_at)})
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Actions */}
-                              <td className="py-3.5 px-4 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setSelectedProperty(prop)}
-                                    className="h-8 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-100"
-                                  >
-                                    <Eye size={12} className="mr-1 text-slate-400" />
-                                    View
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setSelectedProperty(prop)}
-                                    className="h-8 px-2.5 text-xs font-medium text-slate-700 border-slate-200 hover:bg-slate-100"
-                                  >
-                                    <Edit3 size={12} className="mr-1 text-slate-400" />
-                                    Edit
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </>
+              }
+            />
           </>
         )}
 
