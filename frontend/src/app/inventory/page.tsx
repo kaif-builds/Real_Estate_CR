@@ -197,15 +197,9 @@ export default function InventoryPage() {
       '', '', '', '', // plot fields blank
     ]
 
-    const instructions = [
-      '──── INSTRUCTIONS ────', '', '', '', '', '', '',
-      '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-    ]
-
     const wsData = [
       headers,
-      exampleRow,   // row 2: example
-      instructions, // row 3: instructions (hidden visually)
+      exampleRow, // row 2: example (styled with gray fill + italic font below)
     ]
 
     const wb = XLSX.utils.book_new()
@@ -214,16 +208,33 @@ export default function InventoryPage() {
     // Set column widths for readability
     ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length + 4, 16) }))
 
-    // Add a comment-like note to the example row's first cell
-    // (SheetJS doesn't support cell comments easily, so we use a note row)
+    // Apply light gray fill (#F2F2F2) and italic font to example row (row 2, 0-indexed r: 1)
+    for (let col = 0; col < headers.length; col++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 1, c: col })
+      if (!ws[cellRef]) {
+        ws[cellRef] = { t: 's', v: '' }
+      }
+      ws[cellRef].s = {
+        fill: {
+          fgColor: { rgb: 'F2F2F2' },
+          patternType: 'solid',
+        },
+        font: {
+          italic: true,
+          color: { rgb: '666666' },
+        },
+      }
+    }
 
     XLSX.utils.book_append_sheet(wb, ws, 'Properties')
 
     // Add an Instructions sheet
     const instrWs = XLSX.utils.aoa_to_sheet([
-      ['PropDesk CRM — Bulk Import Template'],
+      ['PropDesk CRM — Bulk Import Template Instructions'],
       [''],
-      ['IMPORTANT: Delete the example row (row 2) before uploading!'],
+      ['NOTICE: Row 2 of the "Properties" sheet is a formatted example row.'],
+      ['The CRM automatically detects and ignores "01-Schm140_Mayank" during upload.'],
+      ['You can either overwrite it with your data or delete it.'],
       [''],
       ['Valid Category values:'],
       ['  RENTAL_RESIDENTIAL, RENTAL_COMMERCIAL, BUY_SELL_FLAT, BUY_SELL_COMMERCIAL, PLOT'],
@@ -246,7 +257,7 @@ export default function InventoryPage() {
     instrWs['!cols'] = [{ wch: 80 }]
     XLSX.utils.book_append_sheet(wb, instrWs, 'Instructions')
 
-    XLSX.writeFile(wb, 'PropDesk_Property_Import_Template.xlsx')
+    XLSX.writeFile(wb, 'PropDesk_Property_Import_Template.xlsx', { cellStyles: true })
   }, [])
 
   // ── Parse Uploaded File ───────────────────────────────────────────────────
@@ -356,10 +367,22 @@ export default function InventoryPage() {
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
         const jsonRows = XLSX.utils.sheet_to_json<Record<string, string>>(firstSheet, { defval: '' })
 
-        // Filter out obvious instruction/example rows
+        // Filter out obvious instruction rows and auto-exclude the template's example row (01-Schm140_Mayank)
         const dataRows = jsonRows.filter((row) => {
-          const firstVal = Object.values(row)[0]?.toString() || ''
-          return !firstVal.startsWith('──') && !firstVal.startsWith('EXAMPLE')
+          const firstVal = Object.values(row)[0]?.toString().trim() || ''
+          const shortLocVal = (row['ShortLoc'] || '').toString().trim()
+
+          // Exclude stray instruction/comment rows
+          if (firstVal.startsWith('──') || firstVal.startsWith('EXAMPLE') || firstVal.includes('INSTRUCTION')) {
+            return false
+          }
+
+          // Automatically detect and exclude template's example row where ShortLoc exactly matches "01-Schm140_Mayank"
+          if (shortLocVal === '01-Schm140_Mayank') {
+            return false
+          }
+
+          return true
         })
 
         const parsed = dataRows.map((row, i) => validateAndParseRow(row, i + 2)) // +2 for 1-indexed + header row
