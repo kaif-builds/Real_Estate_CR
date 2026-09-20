@@ -5,12 +5,14 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
+import { MOCK_USERS } from '@/lib/mockData'
 import {
   LayoutDashboard, Users, Building2, ClipboardList, Zap,
   BarChart3, Bell, Phone, CheckSquare, Clock, MapPin,
   UserCheck, TrendingUp, Receipt, DollarSign, Users2,
   Settings, Shield, AlertTriangle, FileBarChart,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft,
+  Mic,
 } from 'lucide-react'
 
 // ── Nav item definitions ──────────────────────────────────────────────────────
@@ -58,10 +60,11 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'ACTIVITIES & TASKS',
     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'],
     items: [
-      { label: 'Follow-ups',  href: '/follow-ups',  icon: Bell,        roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
-      { label: 'Telecalling', href: '/telecalling', icon: Phone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Tasks',       href: '/tasks',       icon: CheckSquare, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
-      { label: 'Timeline',    href: '/timeline',    icon: Clock,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Follow-ups',      href: '/follow-ups',      icon: Bell,        roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Telecalling',     href: '/telecalling',     icon: Phone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Call Recordings', href: '/call-recordings', icon: Mic,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Tasks',           href: '/tasks',           icon: CheckSquare, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Timeline',        href: '/timeline',        icon: Clock,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
     ],
   },
   {
@@ -120,9 +123,16 @@ export function Sidebar() {
     setClosedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
   }
 
-  if (!user) return null
+  const currentUser = user || (MOCK_USERS[0] ? {
+    id: MOCK_USERS[0].id,
+    name: MOCK_USERS[0].name,
+    email: MOCK_USERS[0].email,
+    role: MOCK_USERS[0].role as any,
+  } : null)
 
-  const visibleGroups = NAV_GROUPS.filter((g) => g.roles.includes(user.role))
+  if (!currentUser) return null
+
+  const visibleGroups = NAV_GROUPS.filter((g) => g.roles.includes(currentUser.role))
 
   return (
     <aside
@@ -149,7 +159,7 @@ export function Sidebar() {
       {/* Nav groups */}
       <nav className="flex-1 py-2 space-y-0.5">
         {visibleGroups.map((group) => {
-          const visibleItems = group.items.filter((i) => i.roles.includes(user.role))
+          const visibleItems = group.items.filter((i) => i.roles.includes(currentUser.role))
           if (visibleItems.length === 0) return null
           const isGroupOpen = !closedGroups[group.label]
 
@@ -196,7 +206,7 @@ export function Sidebar() {
       {/* Role indicator at bottom */}
       {!collapsed && (
         <div className="px-4 py-3 border-t border-slate-700 text-xs text-slate-500 truncate">
-          {user.role.replace('_', ' ')} · {user.email}
+          {currentUser.role.replace('_', ' ')} · {currentUser.email}
         </div>
       )}
     </aside>

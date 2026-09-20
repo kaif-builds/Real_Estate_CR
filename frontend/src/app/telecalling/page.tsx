@@ -53,8 +53,8 @@ import {
 } from '@/lib/formatters'
 import {
   MOCK_CALL_LOGS, MOCK_PARTIES, MOCK_LEADS, MOCK_USERS,
-  MOCK_FOLLOW_UPS,
-  type CallLogRow, type FollowUpRow,
+  MOCK_FOLLOW_UPS, MOCK_CALL_RECORDINGS,
+  type CallLogRow, type FollowUpRow, type CallRecording,
 } from '@/lib/mockData'
 
 // ── Dropdown Constants ────────────────────────────────────────────────────────
@@ -383,6 +383,28 @@ export default function TelecallingPage() {
       ai_rates: analysisResult?.rates || null,
       ai_sentiment: analysisResult?.sentiment || null,
       ai_next_action: analysisResult?.nextAction || null,
+    }
+
+    if (analysisResult) {
+      const newRecording: CallRecording = {
+        id: `REC-${Date.now().toString().slice(-4)}`,
+        created_at: new Date().toISOString(),
+        party_id: formPartyId,
+        party_name: party?.name || 'Contact',
+        party_phone: party?.mobile || '+91 9876543210',
+        duration_seconds: (Number(formDuration) || 1) * 60,
+        duration_formatted: `${Number(formDuration) || 1}:00`,
+        sentiment: analysisResult.sentiment,
+        summary: analysisResult.summary,
+        transcript: analysisResult.transcript,
+        rates: analysisResult.rates || [],
+        next_action: editableNextAction || analysisResult.nextAction,
+        uploaded_by_id: formCallerId,
+        uploaded_by_name: caller?.name || 'Neha Kapoor',
+        recording_url: recordingBlobUrl || null,
+        file_name: recordingFile?.name || 'call_recording.wav',
+      }
+      MOCK_CALL_RECORDINGS.unshift(newRecording)
     }
 
     setCalls([newCall, ...calls])

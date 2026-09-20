@@ -621,6 +621,109 @@ export const MOCK_CALL_LOGS: CallLogRow[] = [
   },
 ]
 
+// ── Call Recordings (AI-Analyzed Audio Library) ──────────────────────────────
+
+export interface CallRecording {
+  id: string
+  created_at: string
+  party_id?: string
+  party_name?: string
+  party_phone?: string
+  duration_seconds?: number
+  duration_formatted?: string
+  sentiment: 'Interested' | 'Neutral' | 'Not Interested'
+  summary: string
+  transcript: string
+  rates: { mention: string; amount: string; context: string }[]
+  next_action?: string
+  uploaded_by_id: string
+  uploaded_by_name: string
+  recording_url?: string | null
+  file_name?: string
+}
+
+export const MOCK_CALL_RECORDINGS: CallRecording[] = [
+  {
+    id: 'REC-1001',
+    created_at: '2026-09-20T11:30:00Z',
+    party_id: 'p5',
+    party_name: 'Mr. Manoj Sharma',
+    party_phone: '+91 9876543214',
+    duration_seconds: 15,
+    duration_formatted: '0:15',
+    sentiment: 'Neutral',
+    summary: 'Rajesh from PropDesk called Mr. Sharma about a 3BHK apartment in Scheme 78, mentioning the owner’s price of 85 lakhs, negotiable to around 80 lakhs, and suggested a site visit on Saturday.',
+    transcript: 'Hello, Mr. Sharma, this is Rajesh calling from PropDesk regarding the 3BHK apartment in Scheme 78 you inquired about. The owner is quoting 85 lakhs, but is negotiable around 80 lakhs. Can we arrange a site visit this Saturday?',
+    rates: [
+      { mention: "owner's quote", amount: '85 lakhs', context: 'owner\'s quoted price, negotiable around 80 lakhs' }
+    ],
+    next_action: 'Schedule the site visit for Mr. Sharma on Saturday and confirm the time and address.',
+    uploaded_by_id: 'u3',
+    uploaded_by_name: 'Ravi Mehta',
+    file_name: 'sample_call_scheme78.wav'
+  },
+  {
+    id: 'REC-1002',
+    created_at: '2026-09-19T14:45:00Z',
+    party_id: 'p3',
+    party_name: 'Vikram Singh',
+    party_phone: '+91 9876543212',
+    duration_seconds: 72,
+    duration_formatted: '1:12',
+    sentiment: 'Interested',
+    summary: 'Discussed counter-offer terms for the Mayank Blue Star flat. Buyer Vikram Singh is very keen and confirmed readiness to close at ₹53 Lakhs pending legal deed review.',
+    transcript: 'Agent: Vikram ji, I spoke with seller Ramesh Patel regarding your offer. Client: Excellent Ravi, what did he say? Agent: He is ready to close at 53 Lakhs provided agreement is signed by Friday. Client: Done, that works for me. Please send the draft agreement.',
+    rates: [
+      { mention: 'closing price', amount: '₹53 Lakhs', context: 'agreed final transaction price' }
+    ],
+    next_action: 'Prepare and send draft purchase agreement to Vikram Singh by Thursday evening.',
+    uploaded_by_id: 'u3',
+    uploaded_by_name: 'Ravi Mehta',
+    file_name: 'vikram_offer_call.mp3'
+  },
+  {
+    id: 'REC-1003',
+    created_at: '2026-09-18T16:15:00Z',
+    party_id: 'p6',
+    party_name: 'Rahul Verma',
+    party_phone: '+91 9876543215',
+    duration_seconds: 45,
+    duration_formatted: '0:45',
+    sentiment: 'Not Interested',
+    summary: 'Inquired about Scheme 140 commercial plot rates. After learning the current rate is ₹8,500/sq.ft, client stated it exceeded their ₹6,000 budget and declined further negotiation for this location.',
+    transcript: 'Agent: Hello Rahul, following up on the Scheme 140 plot. Asking is 8,500 per square foot. Client: That is way too steep for our current budget, Neha. We were looking around 6,000. Let us pause on Scheme 140 for now.',
+    rates: [
+      { mention: 'Scheme 140 asking rate', amount: '₹8,500/sq.ft', context: 'plot asking price' },
+      { mention: 'client budget', amount: '₹6,000/sq.ft', context: 'client maximum affordability' }
+    ],
+    next_action: 'Look for alternate commercial inventory in Super Corridor within ₹6,000/sq.ft range.',
+    uploaded_by_id: 'u2',
+    uploaded_by_name: 'Neha Kapoor',
+    file_name: 'rahul_plot_inquiry.wav'
+  },
+  {
+    id: 'REC-1004',
+    created_at: '2026-09-17T10:20:00Z',
+    party_id: 'p4',
+    party_name: 'Amit Jain',
+    party_phone: '+91 9876543213',
+    duration_seconds: 88,
+    duration_formatted: '1:28',
+    sentiment: 'Interested',
+    summary: 'Reviewed 2BHK rental listings near Scheme 140. Amit requested video walkthroughs for two shortlist options quoting ₹18,000/month and ₹22,000/month.',
+    transcript: 'Agent: Good morning Amit ji, I found two furnished 2BHK options in Scheme 140. One is 18,000 rent and the other with dedicated parking is 22,000. Client: Great Neha, please send video clips of both on WhatsApp.',
+    rates: [
+      { mention: 'option 1 rent', amount: '₹18,000/month', context: 'furnished 2BHK without parking' },
+      { mention: 'option 2 rent', amount: '₹22,000/month', context: 'furnished 2BHK with dedicated parking' }
+    ],
+    next_action: 'Send WhatsApp video tours of both Scheme 140 2BHK units to Amit Jain.',
+    uploaded_by_id: 'u2',
+    uploaded_by_name: 'Neha Kapoor',
+    file_name: 'amit_rental_discussion.m4a'
+  }
+]
+
+
 // ── Tasks types & data ────────────────────────────────────────────────────────
 
 export interface TaskRow {
