@@ -1643,9 +1643,26 @@ function CampaignsContent() {
                                   {lead.lead_type}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-slate-500 mt-0.5">
-                                Source: <strong>{lead.source || 'Campaign Direct'}</strong> • Assigned: {lead.assigned_to_name || 'Unassigned'}
-                              </p>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                {lead.channel_type && (
+                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
+                                    lead.channel_type === 'Digital' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                                  }`}>
+                                    {lead.channel_type}
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-slate-700 font-medium">{lead.source || 'Campaign Direct'}</span>
+                                {lead.referral_code && (
+                                  <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1 py-0.2 rounded border border-slate-200">
+                                    {lead.referral_code}
+                                  </span>
+                                )}
+                                <span className="text-slate-300">•</span>
+                                <span className="text-[11px] text-slate-500">Assigned: {lead.assigned_to_name || 'Unassigned'}</span>
+                              </div>
+                              {lead.ad_reference && (
+                                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{lead.ad_reference}</p>
+                              )}
                             </div>
                             <div className="text-right">
                               <span className="font-semibold text-slate-800 block">

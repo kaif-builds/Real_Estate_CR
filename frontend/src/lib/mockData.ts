@@ -8,10 +8,49 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type ChannelType = 'Digital' | 'Offline'
+
+export type DigitalSourceType =
+  | 'Website'
+  | 'Landing Page'
+  | 'Social Media'
+  | 'Search/Display Ad'
+  | 'Property Portal'
+  | 'WhatsApp'
+  | 'Email'
+  | 'QR Code'
+  | 'Digital Form'
+  | 'Other'
+
+export type OfflineSourceType =
+  | 'Newspaper'
+  | 'Hoarding'
+  | 'Banner'
+  | 'Flyer'
+  | 'Brochure'
+  | 'Exhibition'
+  | 'Event'
+  | 'Local Campaign'
+  | 'Networking Event'
+  | 'Referral Drive'
+  | 'Direct Marketing'
+  | 'Other'
+
+export interface LeadSourceItem {
+  id: string
+  name: string
+  channel_type: ChannelType
+  is_active: boolean
+  description?: string
+  leads_count?: number
+  created_at: string
+}
+
 export interface LeadRow {
   id: string
   party_id: string
   party_name: string
+  channel_type?: ChannelType | null
   source: string | null
   lead_type: string
   status: string
@@ -25,6 +64,9 @@ export interface LeadRow {
   created_at: string | null
   campaign_id?: string | null
   campaign_name?: string | null
+  referral_code?: string | null
+  ad_reference?: string | null
+  enquiry_at?: string | null
 }
 
 export type CampaignType =
@@ -190,17 +232,259 @@ export const MOCK_PARTIES: PartyRow[] = [
   { id: 'p8', name: 'Meena Builder',  email: 'meena@example.com',   mobile: '+91 9876543217', city: 'Indore',  roles: ['BUILDER'],           status: 'Active', source: null,       leads_count: 0, requirements_count: 0, opportunities_count: 0, updated_at: '2026-09-10T09:00:00Z' },
 ]
 
+// ── Lead Sources (Master Config) ───────────────────────────────────────────────
+
+export const DEFAULT_LEAD_SOURCES: LeadSourceItem[] = [
+  // Digital sources (10)
+  { id: 'src-dig-01', name: 'Website',           channel_type: 'Digital', is_active: true,  description: 'Direct organic/direct visitors on the main PropDesk agency portal.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-02', name: 'Landing Page',      channel_type: 'Digital', is_active: true,  description: 'Campaign-dedicated standalone landing pages with lead capture forms.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-03', name: 'Social Media',       channel_type: 'Digital', is_active: true,  description: 'Organic posts and paid lead forms on Meta (Instagram/Facebook) and LinkedIn.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-04', name: 'Search/Display Ad', channel_type: 'Digital', is_active: true,  description: 'Google Ads (Search keywords & Display network banners).', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-05', name: 'Property Portal',   channel_type: 'Digital', is_active: true,  description: 'Inbound property listing leads from 99acres, MagicBricks, Housing.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-06', name: 'WhatsApp',          channel_type: 'Digital', is_active: true,  description: 'Inbound chat widget clicks and broadcast response messages.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-07', name: 'Email',             channel_type: 'Digital', is_active: true,  description: 'Email newsletter clicks and dedicated subscriber email blasts.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-08', name: 'QR Code',           channel_type: 'Digital', is_active: true,  description: 'Dynamic QR codes printed on physical collateral directing to digital pages.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-09', name: 'Digital Form',      channel_type: 'Digital', is_active: true,  description: 'Embedded registration widgets on affiliate and community blogs.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-dig-10', name: 'Other',             channel_type: 'Digital', is_active: true,  description: 'Miscellaneous online and digital acquisition channels.', created_at: '2026-01-01T00:00:00Z' },
+
+  // Offline sources (12)
+  { id: 'src-off-01', name: 'Newspaper',         channel_type: 'Offline', is_active: true,  description: 'Print daily newspaper advertisements, classifieds, and weekend inserts.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-02', name: 'Hoarding',          channel_type: 'Offline', is_active: true,  description: 'Prime outdoor billboard hoardings on arterial highways & junctions.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-03', name: 'Banner',            channel_type: 'Offline', is_active: true,  description: 'Street-pole kiosks, gate banners, and local flex boards.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-04', name: 'Flyer',             channel_type: 'Offline', is_active: true,  description: 'Direct door-to-door handbill/pamphlet distribution in targeted societies.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-05', name: 'Brochure',          channel_type: 'Offline', is_active: true,  description: 'Premium physical project booklets handed at client meetings and sales lounges.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-06', name: 'Exhibition',        channel_type: 'Offline', is_active: true,  description: 'Real estate consumer expos and property conventions (CREDAI, etc.).', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-07', name: 'Event',             channel_type: 'Offline', is_active: true,  description: 'Project launch parties, weekend open houses, channel partner meets.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-08', name: 'Local Campaign',    channel_type: 'Offline', is_active: true,  description: 'Targeted micro-market roadshows and mobile promotional canopies.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-09', name: 'Networking Event',  channel_type: 'Offline', is_active: true,  description: 'BNI chapters, chamber of commerce forums, rotary club meetups.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-10', name: 'Referral Drive',    channel_type: 'Offline', is_active: true,  description: 'Structured existing client & alumni word-of-mouth referral programs.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-11', name: 'Direct Marketing',  channel_type: 'Offline', is_active: true,  description: 'Targeted outbound telecalling, corporate park visits, and direct mailers.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-12', name: 'Other',             channel_type: 'Offline', is_active: true,  description: 'Miscellaneous offline acquisition channels and unclassified walk-ins.', created_at: '2026-01-01T00:00:00Z' },
+]
+
 // ── Leads ─────────────────────────────────────────────────────────────────────
 
 export const MOCK_LEADS: LeadRow[] = [
-  { id: 'L-1001', party_id: 'p4', party_name: 'Amit Jain',    source: 'Website',  lead_type: 'BUYER',    status: 'CONTACTED',  priority: 'HIGH',     assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 7500000,  remarks: 'Interested in 2BHK Scheme 140', last_activity_at: '2026-09-18T10:00:00Z', next_follow_up_at: '2026-09-19T12:00:00Z', created_at: '2026-09-10T09:00:00Z', campaign_id: 'CMP-2026-002', campaign_name: 'Scheme 140 Luxury High-Rise Influx' },
-  { id: 'L-1002', party_id: 'p3', party_name: 'Vikram Singh', source: 'Referral', lead_type: 'TENANT',   status: 'NEW',        priority: 'MEDIUM',   assigned_to_id: 'u3', assigned_to_name: 'Ravi Mehta',   value: null,     remarks: null,                            last_activity_at: '2026-09-17T14:00:00Z', next_follow_up_at: null,                   created_at: '2026-09-12T11:00:00Z', campaign_id: 'CMP-2026-003', campaign_name: 'Corporate Office Space Lease Drive' },
-  { id: 'L-1003', party_id: 'p6', party_name: 'Rahul Verma',  source: 'Walk-in',  lead_type: 'BUYER',    status: 'QUALIFIED',  priority: 'CRITICAL', assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 5000000,  remarks: 'Ready to finalize',             last_activity_at: '2026-09-18T08:00:00Z', next_follow_up_at: '2026-09-20T10:00:00Z', created_at: '2026-09-08T15:00:00Z', campaign_id: 'CMP-2026-001', campaign_name: 'Super Corridor Tech Hub Promotion' },
-  { id: 'L-1004', party_id: 'p7', party_name: 'Deepak Broker',source: null,       lead_type: 'CONSULTANT', status: 'LOST',     priority: 'LOW',      assigned_to_id: null, assigned_to_name: null,           value: null,     remarks: 'Not responsive',                last_activity_at: '2026-09-05T09:00:00Z', next_follow_up_at: null,                   created_at: '2026-09-01T08:00:00Z', campaign_id: null, campaign_name: null },
-  { id: 'L-1005', party_id: 'p3', party_name: 'Vikram Singh', source: 'Digital Ad', lead_type: 'BUYER',   status: 'NEW',        priority: 'HIGH',     assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 8500000,  remarks: 'Inquired from Super Corridor Meta ad', last_activity_at: '2026-09-19T11:00:00Z', next_follow_up_at: '2026-09-21T10:00:00Z', created_at: '2026-09-19T11:00:00Z', campaign_id: 'CMP-2026-001', campaign_name: 'Super Corridor Tech Hub Promotion' },
-  { id: 'L-1006', party_id: 'p4', party_name: 'Amit Jain',    source: 'Google Ads', lead_type: 'INVESTOR', status: 'CONTACTED', priority: 'MEDIUM',   assigned_to_id: 'u3', assigned_to_name: 'Ravi Mehta',   value: 6500000,  remarks: 'Looking for commercial plot near IT SEZ', last_activity_at: '2026-09-17T15:30:00Z', next_follow_up_at: '2026-09-20T16:00:00Z', created_at: '2026-09-15T14:00:00Z', campaign_id: 'CMP-2026-001', campaign_name: 'Super Corridor Tech Hub Promotion' },
-  { id: 'L-1007', party_id: 'p6', party_name: 'Rahul Verma',  source: 'Landing Page', lead_type: 'BUYER',  status: 'QUALIFIED',  priority: 'HIGH',     assigned_to_id: 'u1', assigned_to_name: 'Aman Desai',   value: 9200000,  remarks: 'Visited landing page for 3BHK penthouse', last_activity_at: '2026-09-20T10:00:00Z', next_follow_up_at: '2026-09-22T11:00:00Z', created_at: '2026-09-16T09:30:00Z', campaign_id: 'CMP-2026-002', campaign_name: 'Scheme 140 Luxury High-Rise Influx' },
-  { id: 'L-1008', party_id: 'p2', party_name: 'Sunita Gupta', source: 'Telecalling', lead_type: 'LANDLORD', status: 'CONTACTED', priority: 'MEDIUM',   assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 35000,    remarks: 'Agreed for rental listing in Vijay Nagar', last_activity_at: '2026-08-20T16:00:00Z', next_follow_up_at: null,                   created_at: '2026-08-15T12:00:00Z', campaign_id: 'CMP-2026-004', campaign_name: 'Vijay Nagar Landlord Onboarding Q3' },
+  {
+    id: 'L-1001',
+    party_id: 'p4',
+    party_name: 'Amit Jain',
+    channel_type: 'Digital',
+    source: 'Website',
+    lead_type: 'BUYER',
+    status: 'CONTACTED',
+    priority: 'HIGH',
+    assigned_to_id: 'u2',
+    assigned_to_name: 'Neha Kapoor',
+    value: 7500000,
+    remarks: 'Interested in 2BHK Scheme 140',
+    last_activity_at: '2026-09-18T10:00:00Z',
+    next_follow_up_at: '2026-09-19T12:00:00Z',
+    created_at: '2026-09-10T09:00:00Z',
+    campaign_id: 'CMP-2026-002',
+    campaign_name: 'Scheme 140 Luxury High-Rise Influx',
+    referral_code: 'WEB-SCH140-DIR',
+    ad_reference: 'https://propdesk.in/campaigns/scheme140',
+    enquiry_at: '2026-09-10T08:58:00Z',
+  },
+  {
+    id: 'L-1002',
+    party_id: 'p3',
+    party_name: 'Vikram Singh',
+    channel_type: 'Offline',
+    source: 'Referral Drive',
+    lead_type: 'TENANT',
+    status: 'NEW',
+    priority: 'MEDIUM',
+    assigned_to_id: 'u3',
+    assigned_to_name: 'Ravi Mehta',
+    value: null,
+    remarks: 'Referred by corporate park contact for IT office lease',
+    last_activity_at: '2026-09-17T14:00:00Z',
+    next_follow_up_at: null,
+    created_at: '2026-09-12T11:00:00Z',
+    campaign_id: 'CMP-2026-003',
+    campaign_name: 'Corporate Office Space Lease Drive',
+    referral_code: 'REF-TECHPARK-09',
+    ad_reference: null,
+    enquiry_at: '2026-09-12T10:45:00Z',
+  },
+  {
+    id: 'L-1003',
+    party_id: 'p6',
+    party_name: 'Rahul Verma',
+    channel_type: 'Offline',
+    source: 'Hoarding',
+    lead_type: 'BUYER',
+    status: 'QUALIFIED',
+    priority: 'CRITICAL',
+    assigned_to_id: 'u2',
+    assigned_to_name: 'Neha Kapoor',
+    value: 5000000,
+    remarks: 'Ready to finalize; spotted Super Corridor highway billboard',
+    last_activity_at: '2026-09-18T08:00:00Z',
+    next_follow_up_at: '2026-09-20T10:00:00Z',
+    created_at: '2026-09-08T15:00:00Z',
+    campaign_id: 'CMP-2026-001',
+    campaign_name: 'Super Corridor Tech Hub Promotion',
+    referral_code: 'HOARD-CORR-01',
+    ad_reference: null,
+    enquiry_at: '2026-09-08T14:40:00Z',
+  },
+  {
+    id: 'L-1004',
+    party_id: 'p7',
+    party_name: 'Deepak Broker',
+    channel_type: 'Offline',
+    source: 'Networking Event',
+    lead_type: 'CONSULTANT',
+    status: 'LOST',
+    priority: 'LOW',
+    assigned_to_id: null,
+    assigned_to_name: null,
+    value: null,
+    remarks: 'Met at regional realtor chapter meetup; unresponsive',
+    last_activity_at: '2026-09-05T09:00:00Z',
+    next_follow_up_at: null,
+    created_at: '2026-09-01T08:00:00Z',
+    campaign_id: null,
+    campaign_name: null,
+    referral_code: 'NET-BNI-AUG',
+    ad_reference: null,
+    enquiry_at: '2026-09-01T07:30:00Z',
+  },
+  {
+    id: 'L-1005',
+    party_id: 'p3',
+    party_name: 'Vikram Singh',
+    channel_type: 'Digital',
+    source: 'Social Media',
+    lead_type: 'BUYER',
+    status: 'NEW',
+    priority: 'HIGH',
+    assigned_to_id: 'u2',
+    assigned_to_name: 'Neha Kapoor',
+    value: 8500000,
+    remarks: 'Inquired from Super Corridor Meta Instagram carousel ad',
+    last_activity_at: '2026-09-19T11:00:00Z',
+    next_follow_up_at: '2026-09-21T10:00:00Z',
+    created_at: '2026-09-19T11:00:00Z',
+    campaign_id: 'CMP-2026-001',
+    campaign_name: 'Super Corridor Tech Hub Promotion',
+    referral_code: 'META-INSTA-SC26',
+    ad_reference: 'Instagram Carousel Ad #4 (Tech Hub Luxury Plots)',
+    enquiry_at: '2026-09-19T10:55:00Z',
+  },
+  {
+    id: 'L-1006',
+    party_id: 'p4',
+    party_name: 'Amit Jain',
+    channel_type: 'Digital',
+    source: 'Search/Display Ad',
+    lead_type: 'INVESTOR',
+    status: 'CONTACTED',
+    priority: 'MEDIUM',
+    assigned_to_id: 'u3',
+    assigned_to_name: 'Ravi Mehta',
+    value: 6500000,
+    remarks: 'Looking for commercial plot near IT SEZ from Google search click',
+    last_activity_at: '2026-09-17T15:30:00Z',
+    next_follow_up_at: '2026-09-20T16:00:00Z',
+    created_at: '2026-09-15T14:00:00Z',
+    campaign_id: 'CMP-2026-001',
+    campaign_name: 'Super Corridor Tech Hub Promotion',
+    referral_code: 'GGL-SRCH-SEZ',
+    ad_reference: 'Google Search Keyword: "Commercial plots Super Corridor Indore"',
+    enquiry_at: '2026-09-15T13:50:00Z',
+  },
+  {
+    id: 'L-1007',
+    party_id: 'p6',
+    party_name: 'Rahul Verma',
+    channel_type: 'Digital',
+    source: 'Landing Page',
+    lead_type: 'BUYER',
+    status: 'QUALIFIED',
+    priority: 'HIGH',
+    assigned_to_id: 'u1',
+    assigned_to_name: 'Aman Desai',
+    value: 9200000,
+    remarks: 'Visited landing page for Scheme 140 3BHK penthouse package',
+    last_activity_at: '2026-09-20T10:00:00Z',
+    next_follow_up_at: '2026-09-22T11:00:00Z',
+    created_at: '2026-09-16T09:30:00Z',
+    campaign_id: 'CMP-2026-002',
+    campaign_name: 'Scheme 140 Luxury High-Rise Influx',
+    referral_code: 'LP-SCH140-PENT',
+    ad_reference: '/landing/scheme-140-penthouses?utm_source=meta&utm_medium=cpc',
+    enquiry_at: '2026-09-16T09:25:00Z',
+  },
+  {
+    id: 'L-1008',
+    party_id: 'p2',
+    party_name: 'Sunita Gupta',
+    channel_type: 'Offline',
+    source: 'Direct Marketing',
+    lead_type: 'LANDLORD',
+    status: 'CONTACTED',
+    priority: 'MEDIUM',
+    assigned_to_id: 'u2',
+    assigned_to_name: 'Neha Kapoor',
+    value: 35000,
+    remarks: 'Agreed for rental listing in Vijay Nagar after direct flyer outreach',
+    last_activity_at: '2026-08-20T16:00:00Z',
+    next_follow_up_at: null,
+    created_at: '2026-08-15T12:00:00Z',
+    campaign_id: 'CMP-2026-004',
+    campaign_name: 'Vijay Nagar Landlord Onboarding Q3',
+    referral_code: 'DIR-FLYER-VNQ3',
+    ad_reference: null,
+    enquiry_at: '2026-08-15T11:30:00Z',
+  },
+  {
+    id: 'L-1009',
+    party_id: 'p1',
+    party_name: 'Ramesh Patel',
+    channel_type: 'Offline',
+    source: 'Newspaper',
+    lead_type: 'SELLER',
+    status: 'CONTACTED',
+    priority: 'HIGH',
+    assigned_to_id: 'u2',
+    assigned_to_name: 'Neha Kapoor',
+    value: 12000000,
+    remarks: 'Inquired after Dainik Bhaskar weekend property showcase insertion',
+    last_activity_at: '2026-09-18T16:00:00Z',
+    next_follow_up_at: '2026-09-22T10:00:00Z',
+    created_at: '2026-09-18T08:30:00Z',
+    campaign_id: null,
+    campaign_name: null,
+    referral_code: 'NP-DB-IND-09',
+    ad_reference: null,
+    enquiry_at: '2026-09-18T08:15:00Z',
+  },
+  {
+    id: 'L-1010',
+    party_id: 'p5',
+    party_name: 'Kavita Sharma',
+    channel_type: 'Digital',
+    source: 'Property Portal',
+    lead_type: 'LANDLORD',
+    status: 'NEW',
+    priority: 'MEDIUM',
+    assigned_to_id: 'u3',
+    assigned_to_name: 'Ravi Mehta',
+    value: 45000,
+    remarks: 'Enquired via 99acres verified owner-listing lead form',
+    last_activity_at: '2026-09-19T14:15:00Z',
+    next_follow_up_at: '2026-09-21T15:00:00Z',
+    created_at: '2026-09-19T14:15:00Z',
+    campaign_id: null,
+    campaign_name: null,
+    referral_code: '99ACRES-OWNER',
+    ad_reference: '99acres Listing ID #982341 (Premium Banner Placement)',
+    enquiry_at: '2026-09-19T14:05:00Z',
+  },
 ]
 
 // ── Party details ─────────────────────────────────────────────────────────────
