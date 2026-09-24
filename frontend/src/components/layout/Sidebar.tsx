@@ -12,7 +12,7 @@ import {
   UserCheck, TrendingUp, Receipt, DollarSign, Users2,
   Settings, Shield, AlertTriangle, FileBarChart,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft,
-  Mic,
+  Mic, Megaphone,
 } from 'lucide-react'
 
 // ── Nav item definitions ──────────────────────────────────────────────────────
@@ -54,6 +54,13 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Requirements', href: '/requirements',  icon: ClipboardList, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Matching',     href: '/matching',      icon: Zap,           roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Demand-Supply',href: '/demand-supply', icon: BarChart3,     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+    ],
+  },
+  {
+    label: 'MARKETING',
+    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'],
+    items: [
+      { label: 'Campaigns', href: '/campaigns', icon: Megaphone, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
     ],
   },
   {

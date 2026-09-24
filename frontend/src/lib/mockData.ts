@@ -23,6 +23,71 @@ export interface LeadRow {
   last_activity_at: string | null
   next_follow_up_at: string | null
   created_at: string | null
+  campaign_id?: string | null
+  campaign_name?: string | null
+}
+
+export type CampaignType =
+  | 'Property Promotion'
+  | 'Buyer Acquisition'
+  | 'Seller Acquisition'
+  | 'Tenant Acquisition'
+  | 'Landlord Acquisition'
+  | 'Investor Acquisition'
+  | 'Brand Awareness'
+  | 'Lead Generation'
+
+export type CampaignStatus =
+  | 'Draft'
+  | 'Planned'
+  | 'Active'
+  | 'Paused'
+  | 'Completed'
+  | 'Cancelled'
+
+export type TargetAudienceType =
+  | 'Buyers'
+  | 'Sellers'
+  | 'Owners'
+  | 'Tenants'
+  | 'Landlords'
+  | 'Investors'
+  | 'Developers'
+  | 'Brokers'
+
+export type PropertyCategoryType =
+  | 'Residential'
+  | 'Commercial'
+  | 'Industrial'
+  | 'Agricultural'
+
+export type TransactionType =
+  | 'Sale'
+  | 'Purchase'
+  | 'Rent'
+  | 'Lease'
+
+export interface CampaignRow {
+  id: string
+  name: string
+  type: CampaignType
+  status: CampaignStatus
+  start_date: string
+  end_date: string
+  owner_id: string
+  owner_name: string
+  objective: string
+  target_audience: TargetAudienceType[]
+  geography: string
+  categories: PropertyCategoryType[]
+  transaction_types: TransactionType[]
+  planned_budget: number
+  target_leads: number
+  target_qualified_leads: number
+  target_opportunities: number
+  promoted_properties?: string[]
+  created_at: string
+  updated_at: string
 }
 
 export interface PartyRow {
@@ -100,10 +165,14 @@ export const MOCK_PARTIES: PartyRow[] = [
 // ── Leads ─────────────────────────────────────────────────────────────────────
 
 export const MOCK_LEADS: LeadRow[] = [
-  { id: 'L-1001', party_id: 'p4', party_name: 'Amit Jain',    source: 'Website',  lead_type: 'BUYER',    status: 'CONTACTED',  priority: 'HIGH',     assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 7500000,  remarks: 'Interested in 2BHK Scheme 140', last_activity_at: '2026-09-18T10:00:00Z', next_follow_up_at: '2026-09-19T12:00:00Z', created_at: '2026-09-10T09:00:00Z' },
-  { id: 'L-1002', party_id: 'p3', party_name: 'Vikram Singh', source: 'Referral', lead_type: 'TENANT',   status: 'NEW',        priority: 'MEDIUM',   assigned_to_id: 'u3', assigned_to_name: 'Ravi Mehta',   value: null,     remarks: null,                            last_activity_at: '2026-09-17T14:00:00Z', next_follow_up_at: null,                   created_at: '2026-09-12T11:00:00Z' },
-  { id: 'L-1003', party_id: 'p6', party_name: 'Rahul Verma',  source: 'Walk-in',  lead_type: 'BUYER',    status: 'QUALIFIED',  priority: 'CRITICAL', assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 5000000,  remarks: 'Ready to finalize',             last_activity_at: '2026-09-18T08:00:00Z', next_follow_up_at: '2026-09-20T10:00:00Z', created_at: '2026-09-08T15:00:00Z' },
-  { id: 'L-1004', party_id: 'p7', party_name: 'Deepak Broker',source: null,       lead_type: 'CONSULTANT', status: 'LOST',     priority: 'LOW',      assigned_to_id: null, assigned_to_name: null,           value: null,     remarks: 'Not responsive',                last_activity_at: '2026-09-05T09:00:00Z', next_follow_up_at: null,                   created_at: '2026-09-01T08:00:00Z' },
+  { id: 'L-1001', party_id: 'p4', party_name: 'Amit Jain',    source: 'Website',  lead_type: 'BUYER',    status: 'CONTACTED',  priority: 'HIGH',     assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 7500000,  remarks: 'Interested in 2BHK Scheme 140', last_activity_at: '2026-09-18T10:00:00Z', next_follow_up_at: '2026-09-19T12:00:00Z', created_at: '2026-09-10T09:00:00Z', campaign_id: 'CMP-2026-002', campaign_name: 'Scheme 140 Luxury High-Rise Influx' },
+  { id: 'L-1002', party_id: 'p3', party_name: 'Vikram Singh', source: 'Referral', lead_type: 'TENANT',   status: 'NEW',        priority: 'MEDIUM',   assigned_to_id: 'u3', assigned_to_name: 'Ravi Mehta',   value: null,     remarks: null,                            last_activity_at: '2026-09-17T14:00:00Z', next_follow_up_at: null,                   created_at: '2026-09-12T11:00:00Z', campaign_id: 'CMP-2026-003', campaign_name: 'Corporate Office Space Lease Drive' },
+  { id: 'L-1003', party_id: 'p6', party_name: 'Rahul Verma',  source: 'Walk-in',  lead_type: 'BUYER',    status: 'QUALIFIED',  priority: 'CRITICAL', assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 5000000,  remarks: 'Ready to finalize',             last_activity_at: '2026-09-18T08:00:00Z', next_follow_up_at: '2026-09-20T10:00:00Z', created_at: '2026-09-08T15:00:00Z', campaign_id: 'CMP-2026-001', campaign_name: 'Super Corridor Tech Hub Promotion' },
+  { id: 'L-1004', party_id: 'p7', party_name: 'Deepak Broker',source: null,       lead_type: 'CONSULTANT', status: 'LOST',     priority: 'LOW',      assigned_to_id: null, assigned_to_name: null,           value: null,     remarks: 'Not responsive',                last_activity_at: '2026-09-05T09:00:00Z', next_follow_up_at: null,                   created_at: '2026-09-01T08:00:00Z', campaign_id: null, campaign_name: null },
+  { id: 'L-1005', party_id: 'p3', party_name: 'Vikram Singh', source: 'Digital Ad', lead_type: 'BUYER',   status: 'NEW',        priority: 'HIGH',     assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 8500000,  remarks: 'Inquired from Super Corridor Meta ad', last_activity_at: '2026-09-19T11:00:00Z', next_follow_up_at: '2026-09-21T10:00:00Z', created_at: '2026-09-19T11:00:00Z', campaign_id: 'CMP-2026-001', campaign_name: 'Super Corridor Tech Hub Promotion' },
+  { id: 'L-1006', party_id: 'p4', party_name: 'Amit Jain',    source: 'Google Ads', lead_type: 'INVESTOR', status: 'CONTACTED', priority: 'MEDIUM',   assigned_to_id: 'u3', assigned_to_name: 'Ravi Mehta',   value: 6500000,  remarks: 'Looking for commercial plot near IT SEZ', last_activity_at: '2026-09-17T15:30:00Z', next_follow_up_at: '2026-09-20T16:00:00Z', created_at: '2026-09-15T14:00:00Z', campaign_id: 'CMP-2026-001', campaign_name: 'Super Corridor Tech Hub Promotion' },
+  { id: 'L-1007', party_id: 'p6', party_name: 'Rahul Verma',  source: 'Landing Page', lead_type: 'BUYER',  status: 'QUALIFIED',  priority: 'HIGH',     assigned_to_id: 'u1', assigned_to_name: 'Aman Desai',   value: 9200000,  remarks: 'Visited landing page for 3BHK penthouse', last_activity_at: '2026-09-20T10:00:00Z', next_follow_up_at: '2026-09-22T11:00:00Z', created_at: '2026-09-16T09:30:00Z', campaign_id: 'CMP-2026-002', campaign_name: 'Scheme 140 Luxury High-Rise Influx' },
+  { id: 'L-1008', party_id: 'p2', party_name: 'Sunita Gupta', source: 'Telecalling', lead_type: 'LANDLORD', status: 'CONTACTED', priority: 'MEDIUM',   assigned_to_id: 'u2', assigned_to_name: 'Neha Kapoor',  value: 35000,    remarks: 'Agreed for rental listing in Vijay Nagar', last_activity_at: '2026-08-20T16:00:00Z', next_follow_up_at: null,                   created_at: '2026-08-15T12:00:00Z', campaign_id: 'CMP-2026-004', campaign_name: 'Vijay Nagar Landlord Onboarding Q3' },
 ]
 
 // ── Party details ─────────────────────────────────────────────────────────────
@@ -2005,6 +2074,143 @@ export const MOCK_AUDIT_LOGS: AuditLogRow[] = [
       client_name: 'Aman Verma',
     },
     ip_address: '192.168.1.42',
+  },
+]
+
+// ── Marketing Campaigns ───────────────────────────────────────────────────────
+
+export const MOCK_CAMPAIGNS: CampaignRow[] = [
+  {
+    id: 'CMP-2026-001',
+    name: 'Super Corridor Tech Hub Promotion',
+    type: 'Property Promotion',
+    status: 'Active',
+    start_date: '2026-09-01',
+    end_date: '2026-10-31',
+    owner_id: 'u2',
+    owner_name: 'Neha Kapoor',
+    objective: 'Drive buyer inquiries for premium commercial and residential plots near the Super Corridor IT SEZ.',
+    target_audience: ['Buyers', 'Investors'],
+    geography: '09-Super_Corridor, Indore',
+    categories: ['Commercial', 'Residential'],
+    transaction_types: ['Sale', 'Purchase'],
+    planned_budget: 75000,
+    target_leads: 50,
+    target_qualified_leads: 20,
+    target_opportunities: 8,
+    promoted_properties: ['P-1008', 'P-1009'],
+    created_at: '2026-08-25T10:00:00Z',
+    updated_at: '2026-09-18T14:30:00Z',
+  },
+  {
+    id: 'CMP-2026-002',
+    name: 'Scheme 140 Luxury High-Rise Influx',
+    type: 'Buyer Acquisition',
+    status: 'Active',
+    start_date: '2026-09-10',
+    end_date: '2026-10-25',
+    owner_id: 'u1',
+    owner_name: 'Aman Desai',
+    objective: 'Target high-net-worth individuals looking for 3BHK and penthouse flats in Scheme 140.',
+    target_audience: ['Buyers', 'Investors'],
+    geography: '01-Schm140_Mayank, Indore',
+    categories: ['Residential'],
+    transaction_types: ['Sale'],
+    planned_budget: 120000,
+    target_leads: 80,
+    target_qualified_leads: 35,
+    target_opportunities: 15,
+    promoted_properties: ['P-1003'],
+    created_at: '2026-09-02T11:15:00Z',
+    updated_at: '2026-09-20T09:10:00Z',
+  },
+  {
+    id: 'CMP-2026-003',
+    name: 'Corporate Office Space Lease Drive',
+    type: 'Tenant Acquisition',
+    status: 'Paused',
+    start_date: '2026-08-15',
+    end_date: '2026-09-30',
+    owner_id: 'u3',
+    owner_name: 'Ravi Mehta',
+    objective: 'Attract IT firms, clinics, and startups looking for ready-to-move furnished offices on MG Road.',
+    target_audience: ['Tenants', 'Brokers'],
+    geography: '05-MG_Road, Indore',
+    categories: ['Commercial'],
+    transaction_types: ['Rent', 'Lease'],
+    planned_budget: 45000,
+    target_leads: 30,
+    target_qualified_leads: 12,
+    target_opportunities: 5,
+    promoted_properties: ['P-1005'],
+    created_at: '2026-08-10T08:45:00Z',
+    updated_at: '2026-09-15T16:20:00Z',
+  },
+  {
+    id: 'CMP-2026-004',
+    name: 'Vijay Nagar Landlord Onboarding Q3',
+    type: 'Landlord Acquisition',
+    status: 'Completed',
+    start_date: '2026-07-01',
+    end_date: '2026-08-31',
+    owner_id: 'u2',
+    owner_name: 'Neha Kapoor',
+    objective: 'Acquire exclusive rental mandates from property owners in Vijay Nagar and Geeta Bhawan.',
+    target_audience: ['Landlords', 'Owners'],
+    geography: '04-Vijay_Nagar, 07-Geeta_Bhawan',
+    categories: ['Residential', 'Commercial'],
+    transaction_types: ['Rent', 'Lease'],
+    planned_budget: 35000,
+    target_leads: 25,
+    target_qualified_leads: 18,
+    target_opportunities: 10,
+    promoted_properties: ['P-1001', 'P-1002'],
+    created_at: '2026-06-25T12:00:00Z',
+    updated_at: '2026-08-31T18:00:00Z',
+  },
+  {
+    id: 'CMP-2026-005',
+    name: 'Diwali Festive Land Investment',
+    type: 'Lead Generation',
+    status: 'Planned',
+    start_date: '2026-10-01',
+    end_date: '2026-11-15',
+    owner_id: 'u5',
+    owner_name: 'Priya Sharma',
+    objective: 'Pre-festive promotional push across social and digital channels for upcoming plot developments.',
+    target_audience: ['Buyers', 'Investors', 'Developers'],
+    geography: 'Indore Suburbs, Super Corridor',
+    categories: ['Residential', 'Agricultural'],
+    transaction_types: ['Sale'],
+    planned_budget: 150000,
+    target_leads: 100,
+    target_qualified_leads: 40,
+    target_opportunities: 12,
+    promoted_properties: [],
+    created_at: '2026-09-18T10:00:00Z',
+    updated_at: '2026-09-18T10:00:00Z',
+  },
+  {
+    id: 'CMP-2026-006',
+    name: 'Indore Prime Commercial Awareness',
+    type: 'Brand Awareness',
+    status: 'Draft',
+    start_date: '2026-10-15',
+    end_date: '2026-12-31',
+    owner_id: 'u1',
+    owner_name: 'Aman Desai',
+    objective: 'Establish PropDesk as the leading agency for commercial real estate in Central India.',
+    target_audience: ['Brokers', 'Developers', 'Investors'],
+    geography: 'Indore Metro Region',
+    categories: ['Commercial', 'Industrial'],
+    transaction_types: ['Sale', 'Lease'],
+    planned_budget: 200000,
+    target_leads: 60,
+    target_qualified_leads: 25,
+    target_opportunities: 10,
+    promoted_properties: [],
+    created_at: '2026-09-20T16:00:00Z',
+    updated_at: '2026-09-20T16:00:00Z',
   },
 ]
 
