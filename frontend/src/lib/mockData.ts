@@ -90,6 +90,34 @@ export interface CampaignRow {
   updated_at: string
 }
 
+export interface CampaignPropertyPromotion {
+  id: string
+  campaign_id: string
+  property_id: string
+  marketing_headline: string
+  marketing_description: string
+  cta_text: string
+  media_attachments: string[] // file-name references (e.g. photos, videos, brochure)
+  enquiries_count: number
+  added_at: string
+}
+
+export interface DemandGapItem {
+  id: string
+  category: string
+  category_label: string
+  short_loc: string
+  demand_count: number
+  supply_count: number
+  gap: number
+  suggested_campaign_type: CampaignType
+  suggested_campaign_name: string
+  suggested_objective: string
+  suggested_audience: TargetAudienceType[]
+  suggested_category: PropertyCategoryType
+  suggested_transaction: TransactionType
+}
+
 export interface PartyRow {
   id: string
   name: string
@@ -2098,7 +2126,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     target_leads: 50,
     target_qualified_leads: 20,
     target_opportunities: 8,
-    promoted_properties: ['P-1008', 'P-1009'],
+    promoted_properties: ['P-1003', 'P-1008', 'P-1009'],
     created_at: '2026-08-25T10:00:00Z',
     updated_at: '2026-09-18T14:30:00Z',
   },
@@ -2213,4 +2241,170 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     updated_at: '2026-09-20T16:00:00Z',
   },
 ]
+
+// ── Campaign Property Promotions (Many-to-Many Linking) ────────────────────────
+
+export const MOCK_CAMPAIGN_PROMOTIONS: CampaignPropertyPromotion[] = [
+  {
+    id: 'PROM-101',
+    campaign_id: 'CMP-2026-001',
+    property_id: 'P-1003',
+    marketing_headline: 'Exclusive 3BHK High-Rise Near Tech Corridor',
+    marketing_description: 'Spacious 1650 sq.ft flat in Mayank Blue Star with premium fittings and fast access to IT SEZ.',
+    cta_text: 'Book private inspection this weekend',
+    media_attachments: ['mayank_elevation.jpg', 'floor_plan_3bhk.pdf'],
+    enquiries_count: 6,
+    added_at: '2026-09-02T10:00:00Z',
+  },
+  {
+    id: 'PROM-102',
+    campaign_id: 'CMP-2026-002',
+    property_id: 'P-1003',
+    marketing_headline: 'Scheme 140 Luxury Corner 3BHK — Ready for Possession',
+    marketing_description: 'Prime 6th floor apartment with dual parking, wide balconies, and Vastu-compliant layout.',
+    cta_text: 'Schedule site visit today',
+    media_attachments: ['living_room_luxury.jpg', 'balcony_view.jpg', 'scheme140_brochure.pdf'],
+    enquiries_count: 9,
+    added_at: '2026-09-11T12:30:00Z',
+  },
+  {
+    id: 'PROM-103',
+    campaign_id: 'CMP-2026-001',
+    property_id: 'P-1008',
+    marketing_headline: 'Prime Investment Plot on 200ft Super Corridor Road',
+    marketing_description: 'East-facing residential plot in gated township with club house, underground cabling, and clear titles.',
+    cta_text: 'Enquire for festive discount price',
+    media_attachments: ['plot_layout_map.pdf', 'corridor_drone_view.mp4'],
+    enquiries_count: 14,
+    added_at: '2026-09-03T14:00:00Z',
+  },
+  {
+    id: 'PROM-104',
+    campaign_id: 'CMP-2026-001',
+    property_id: 'P-1009',
+    marketing_headline: 'Ultra-Luxury 4BHK Penthouse with Private Terrace',
+    marketing_description: 'Exclusive 2400 sq.ft duplex penthouse overlooking scenic garden at Super Corridor.',
+    cta_text: 'Request private brochure',
+    media_attachments: ['penthouse_terrace.jpg', 'interior_3d_walkthrough.mp4'],
+    enquiries_count: 8,
+    added_at: '2026-09-05T09:15:00Z',
+  },
+  {
+    id: 'PROM-105',
+    campaign_id: 'CMP-2026-003',
+    property_id: 'P-1005',
+    marketing_headline: 'Fully Furnished 22-Seater Corporate Office on MG Road',
+    marketing_description: 'Plug-and-play office setup with 2 cabins, conference room, server room, and high-speed fiber link.',
+    cta_text: 'Schedule executive walkthrough',
+    media_attachments: ['reception_mgroad.jpg', 'conference_room.jpg', 'lease_terms.pdf'],
+    enquiries_count: 5,
+    added_at: '2026-08-16T11:00:00Z',
+  },
+  {
+    id: 'PROM-106',
+    campaign_id: 'CMP-2026-004',
+    property_id: 'P-1001',
+    marketing_headline: 'Premium Semi-Furnished 2BHK Rental in Scheme 140',
+    marketing_description: 'Available for immediate family tenancy with modular kitchen and covered parking.',
+    cta_text: 'Apply for tenancy screening',
+    media_attachments: ['kitchen_modular.jpg'],
+    enquiries_count: 11,
+    added_at: '2026-07-05T15:00:00Z',
+  },
+  {
+    id: 'PROM-107',
+    campaign_id: 'CMP-2026-004',
+    property_id: 'P-1002',
+    marketing_headline: 'Furnished 3BHK Near Geeta Bhawan Square',
+    marketing_description: 'Spacious 2nd floor flat with dual covered parkings, near premier schools and hospitals.',
+    cta_text: 'Book site inspection',
+    media_attachments: ['geeta_bhawan_exterior.jpg'],
+    enquiries_count: 7,
+    added_at: '2026-07-08T16:30:00Z',
+  },
+]
+
+// ── Promotion & Demand Gap Helpers ────────────────────────────────────────────
+
+export function getCampaignPromotions(campaignId: string): CampaignPropertyPromotion[] {
+  return MOCK_CAMPAIGN_PROMOTIONS.filter(p => p.campaign_id === campaignId)
+}
+
+export function getPropertyActivePromotions(propertyId: string): { campaign: CampaignRow; promotion: CampaignPropertyPromotion }[] {
+  const promos = MOCK_CAMPAIGN_PROMOTIONS.filter(p => p.property_id === propertyId)
+  const result: { campaign: CampaignRow; promotion: CampaignPropertyPromotion }[] = []
+  for (const promo of promos) {
+    const campaign = MOCK_CAMPAIGNS.find(c => c.id === promo.campaign_id)
+    if (campaign && campaign.status === 'Active') {
+      result.push({ campaign, promotion: promo })
+    }
+  }
+  return result
+}
+
+export function getDemandGaps(): DemandGapItem[] {
+  return [
+    {
+      id: 'GAP-1',
+      category: 'BUY_SELL_FLAT',
+      category_label: 'Buy-Sell Flat/Duplex',
+      short_loc: '08-SAPNA_SANGEETA',
+      demand_count: 3,
+      supply_count: 1,
+      gap: 2,
+      suggested_campaign_type: 'Seller Acquisition',
+      suggested_campaign_name: 'Sapna Sangeeta Flat Seller Acquisition',
+      suggested_objective: 'Target residential property owners in Sapna Sangeeta to onboard new flat listings to fulfill unmet buyer demand (Gap: +2).',
+      suggested_audience: ['Sellers', 'Owners'],
+      suggested_category: 'Residential',
+      suggested_transaction: 'Sale',
+    },
+    {
+      id: 'GAP-2',
+      category: 'RENTAL_RESIDENTIAL',
+      category_label: 'Rental Residential',
+      short_loc: '07-Geeta_Bhawan',
+      demand_count: 3,
+      supply_count: 1,
+      gap: 2,
+      suggested_campaign_type: 'Landlord Acquisition',
+      suggested_campaign_name: 'Geeta Bhawan Landlord Onboarding Drive',
+      suggested_objective: 'Onboard high-yield rental residential properties in Geeta Bhawan for qualified tenant waitlist (Gap: +2).',
+      suggested_audience: ['Landlords', 'Owners'],
+      suggested_category: 'Residential',
+      suggested_transaction: 'Rent',
+    },
+    {
+      id: 'GAP-3',
+      category: 'PLOT',
+      category_label: 'Plot/Jameen',
+      short_loc: '09-Super_Corridor',
+      demand_count: 4,
+      supply_count: 2,
+      gap: 2,
+      suggested_campaign_type: 'Property Promotion',
+      suggested_campaign_name: 'Super Corridor Commercial & Residential Plots Showcase',
+      suggested_objective: 'Promote newly available highway-adjacent plots near IT SEZ to high-intent investors and builders (Gap: +2).',
+      suggested_audience: ['Buyers', 'Investors', 'Developers'],
+      suggested_category: 'Commercial',
+      suggested_transaction: 'Sale',
+    },
+    {
+      id: 'GAP-4',
+      category: 'RENTAL_COMMERCIAL',
+      category_label: 'Rental Commercial',
+      short_loc: '05-MG_Road',
+      demand_count: 2,
+      supply_count: 1,
+      gap: 1,
+      suggested_campaign_type: 'Landlord Acquisition',
+      suggested_campaign_name: 'MG Road Corporate Space Landlord Acquisition',
+      suggested_objective: 'Acquire furnished and bare-shell commercial office spaces on MG Road for startup and corporate lease demand (Gap: +1).',
+      suggested_audience: ['Landlords', 'Owners', 'Brokers'],
+      suggested_category: 'Commercial',
+      suggested_transaction: 'Lease',
+    },
+  ]
+}
+
 

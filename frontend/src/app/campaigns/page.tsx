@@ -1,15 +1,21 @@
 'use client'
 
 /**
- * Marketing Module — Campaigns Page
+ * Marketing Module — Campaigns Page & Property Promotion
  *
- * Dedicated sub-module for creating, managing, and tracking marketing campaigns.
+ * Dedicated sub-module for creating, managing, and tracking marketing campaigns
+ * and property-specific promotions.
+ *
  * Features:
  * - Sortable & filterable DataTable (Type, Status, Owner, Date Range, Search)
  * - Computed "Leads Generated" count from linked mock leads
  * - "+ New Campaign" modal form with multi-select fields (Audience, Category, Transaction Type)
- * - Campaign Detail View with Overview metrics and placeholder tabs:
- *   "Promoted Properties" and "Leads Generated"
+ * - Campaign Detail View with Overview metrics and tabs:
+ *   - "Promoted Properties" tab with real inventory linking, multi-campaign associations,
+ *     campaign-specific marketing headlines, CTA, media tags, and remove action
+ *   - "Leads Generated" tab with attributed leads
+ * - "+ Add Property to Campaign" picker with filters, multi-select, and Property Collection shortcut
+ * - "Suggest Properties from Demand Gaps" helper pre-filling campaign creation
  * - Preserves immutable campaign history: NO delete action, only status transitions
  *
  * Role: SUPER_ADMIN, OFFICE_EXECUTIVE
@@ -21,7 +27,9 @@ import {
   Megaphone, Plus, Search, Calendar, Users, Target, Building2,
   TrendingUp, CheckCircle2, Clock, AlertCircle, PauseCircle,
   XCircle, Eye, ArrowRight, Layers, Tag, MapPin, IndianRupee,
-  FileText, Check, ChevronRight, BarChart3, ShieldCheck
+  FileText, Check, ChevronRight, BarChart3, ShieldCheck,
+  Trash2, Edit3, Image, Video, Sparkles, Filter, CheckSquare,
+  Square, AlertTriangle, ExternalLink, ArrowUpRight
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
@@ -32,12 +40,13 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog } from '@/components/ui/dialog'
 import { DataTable, type ColumnDef } from '@/components/ui/data-table'
-import { formatPrice, formatDate } from '@/lib/formatters'
+import { formatPrice, formatDate, formatCategory } from '@/lib/formatters'
 import {
   MOCK_CAMPAIGNS, MOCK_LEADS, MOCK_USERS, MOCK_PROPERTIES,
+  MOCK_CAMPAIGN_PROMOTIONS, getDemandGaps,
   type CampaignRow, type CampaignType, type CampaignStatus,
   type TargetAudienceType, type PropertyCategoryType, type TransactionType,
-  type LeadRow
+  type LeadRow, type CampaignPropertyPromotion, type DemandGapItem, type PropertyRow
 } from '@/lib/mockData'
 
 // ── Dropdown Constants ────────────────────────────────────────────────────────
@@ -103,6 +112,15 @@ const COMMON_SHORT_LOCS = [
   '08-SAPNA_SANGEETA',
 ]
 
+const CTA_PRESETS = [
+  'Book a site visit today',
+  'Schedule an exclusive preview',
+  'Enquire for festive pricing',
+  'Call for best negotiable deal',
+  'Apply for tenancy screening',
+  'Register your interest now',
+]
+
 // ── Status Badge Helper ───────────────────────────────────────────────────────
 
 function CampaignStatusBadge({ status }: { status: CampaignStatus }) {
@@ -153,6 +171,23 @@ function CampaignStatusBadge({ status }: { status: CampaignStatus }) {
   }
 }
 
+function ShortLocBadge({ code }: { code: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-semibold bg-indigo-50 text-indigo-900 border border-indigo-200">
+      <MapPin size={11} className="text-indigo-600 shrink-0" />
+      <span>{code}</span>
+    </span>
+  )
+}
+
+function getVerificationStatus(iso: string | null) {
+  if (!iso) return { label: 'Never Verified', isStale: true }
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  if (days <= 2) return { label: 'Verified', isStale: false }
+  if (days <= 5) return { label: `${days}d ago`, isStale: false }
+  return { label: `${days}d ago (Stale)`, isStale: true }
+}
+
 // ── Main Campaigns Component ──────────────────────────────────────────────────
 
 function CampaignsContent() {
@@ -166,6 +201,8 @@ function CampaignsContent() {
   // State
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([...MOCK_CAMPAIGNS])
   const [leads] = useState<LeadRow[]>([...MOCK_LEADS])
+  const [promotions, setPromotions] = useState<CampaignPropertyPromotion[]>([...MOCK_CAMPAIGN_PROMOTIONS])
+  const [demandGaps] = useState<DemandGapItem[]>(getDemandGaps())
 
   // Filters
   const [fType, setFType] = useState<string>('')
@@ -175,6 +212,9 @@ function CampaignsContent() {
 
   // Modals & Drawers
   const [showCreateModal, setShowCreateModal] = useState(initialCreate)
+  const [showPropertyPicker, setShowPropertyPicker] = useState(false)
+  const [showDemandGapsModal, setShowDemandGapsModal] = useState(false)
+  const [editingPromotion, setEditingPromotion] = useState<CampaignPropertyPromotion | null>(null)
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignRow | null>(() => {
     if (initialCampaignId) {
       return MOCK_CAMPAIGNS.find(c => c.id === initialCampaignId) || null
@@ -182,6 +222,22 @@ function CampaignsContent() {
     return null
   })
   const [detailTab, setDetailTab] = useState<'overview' | 'properties' | 'leads'>(initialTab)
+
+  // Property Picker State
+  const [pickerSearch, setPickerSearch] = useState('')
+  const [pickerCategory, setPickerCategory] = useState('')
+  const [pickerLocation, setPickerLocation] = useState('')
+  const [selectedPropIds, setSelectedPropIds] = useState<string[]>([])
+  const [pickerHeadline, setPickerHeadline] = useState('')
+  const [pickerDescription, setPickerDescription] = useState('')
+  const [pickerCta, setPickerCta] = useState('Book a site visit today')
+  const [pickerMedia, setPickerMedia] = useState('elevation.jpg, floor_plan.pdf')
+
+  // Edit Marketing Content Form State
+  const [editHeadline, setEditHeadline] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editCta, setEditCta] = useState('')
+  const [editMedia, setEditMedia] = useState('')
 
   // "+ New Campaign" form local state
   const [formName, setFormName] = useState('')
@@ -201,12 +257,8 @@ function CampaignsContent() {
   const [formStatus, setFormStatus] = useState<CampaignStatus>('Planned')
 
   useEffect(() => {
-    if (initialStatus) {
-      setFStatus(initialStatus)
-    }
-    if (initialCreate) {
-      setShowCreateModal(true)
-    }
+    if (initialStatus) setFStatus(initialStatus)
+    if (initialCreate) setShowCreateModal(true)
     if (initialCampaignId) {
       const match = campaigns.find(c => c.id === initialCampaignId)
       if (match) {
@@ -227,6 +279,21 @@ function CampaignsContent() {
   const getLinkedLeads = useCallback((campaignId: string) => {
     return leads.filter(l => l.campaign_id === campaignId)
   }, [leads])
+
+  // Get active promotions for a campaign
+  const campaignPromotions = useMemo(() => {
+    if (!selectedCampaign) return []
+    return promotions.filter(p => p.campaign_id === selectedCampaign.id)
+  }, [selectedCampaign, promotions])
+
+  // Get all campaigns promoting a specific property
+  const getPropertyCampaigns = useCallback((propertyId: string) => {
+    const matchedPromos = promotions.filter(p => p.property_id === propertyId)
+    return matchedPromos.map(pr => {
+      const cmp = campaigns.find(c => c.id === pr.campaign_id)
+      return { promotion: pr, campaign: cmp }
+    }).filter(item => Boolean(item.campaign))
+  }, [promotions, campaigns])
 
   // Inline status updater (Strictly preserves campaign history — no delete)
   const updateCampaignStatus = useCallback((id: string, newStatus: CampaignStatus) => {
@@ -262,6 +329,189 @@ function CampaignsContent() {
       return true
     })
   }, [campaigns, fType, fStatus, fOwner, fDateRange])
+
+  // ── Property Picker Logic ──────────────────────────────────────────────────
+
+  const currentlyPromotedPropIds = useMemo(() => {
+    if (!selectedCampaign) return new Set<string>()
+    return new Set(promotions.filter(p => p.campaign_id === selectedCampaign.id).map(p => p.property_id))
+  }, [selectedCampaign, promotions])
+
+  const filteredInventoryProperties = useMemo(() => {
+    return MOCK_PROPERTIES.filter(prop => {
+      if (pickerSearch) {
+        const q = pickerSearch.toLowerCase()
+        const matchesId = prop.id.toLowerCase().includes(q)
+        const matchesLoc = prop.short_loc.toLowerCase().includes(q)
+        const matchesAddr = prop.address?.toLowerCase().includes(q)
+        if (!matchesId && !matchesLoc && !matchesAddr) return false
+      }
+      if (pickerCategory && prop.category !== pickerCategory) return false
+      if (pickerLocation && prop.short_loc !== pickerLocation) return false
+      return true
+    })
+  }, [pickerSearch, pickerCategory, pickerLocation])
+
+  const availableFilteredProperties = useMemo(() => {
+    return filteredInventoryProperties.filter(p => !currentlyPromotedPropIds.has(p.id))
+  }, [filteredInventoryProperties, currentlyPromotedPropIds])
+
+  const toggleSelectProperty = (id: string) => {
+    setSelectedPropIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const handleSelectAllFiltered = () => {
+    const unaddedIds = availableFilteredProperties.map(p => p.id)
+    const allSelected = unaddedIds.every(id => selectedPropIds.includes(id))
+    if (allSelected) {
+      setSelectedPropIds(prev => prev.filter(id => !unaddedIds.includes(id)))
+    } else {
+      setSelectedPropIds(prev => Array.from(new Set([...prev, ...unaddedIds])))
+    }
+  }
+
+  // Handle adding selected properties to campaign with marketing content
+  const handleAddPropertiesSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedCampaign || selectedPropIds.length === 0) return
+
+    const mediaList = pickerMedia
+      .split(',')
+      .map(m => m.trim())
+      .filter(Boolean)
+
+    const newPromos: CampaignPropertyPromotion[] = selectedPropIds.map((propId, idx) => {
+      const prop = MOCK_PROPERTIES.find(p => p.id === propId)
+      return {
+        id: `PROM-${Date.now().toString(36).toUpperCase()}-${idx}`,
+        campaign_id: selectedCampaign.id,
+        property_id: propId,
+        marketing_headline: pickerHeadline.trim() || `Featured ${formatCategory(prop?.category || '')} in ${prop?.short_loc || 'Indore'}`,
+        marketing_description: pickerDescription.trim() || `Prime ${formatCategory(prop?.category || '')} offered under ${selectedCampaign.name}.`,
+        cta_text: pickerCta.trim() || 'Book a site visit today',
+        media_attachments: mediaList.length > 0 ? mediaList : ['property_showcase.jpg'],
+        enquiries_count: 0,
+        added_at: new Date().toISOString(),
+      }
+    })
+
+    setPromotions(prev => [...prev, ...newPromos])
+
+    // Update campaign's promoted_properties array
+    setCampaigns(prev =>
+      prev.map(c =>
+        c.id === selectedCampaign.id
+          ? {
+              ...c,
+              promoted_properties: Array.from(new Set([...(c.promoted_properties || []), ...selectedPropIds])),
+              updated_at: new Date().toISOString(),
+            }
+          : c
+      )
+    )
+
+    setSelectedCampaign(prev =>
+      prev
+        ? {
+            ...prev,
+            promoted_properties: Array.from(new Set([...(prev.promoted_properties || []), ...selectedPropIds])),
+            updated_at: new Date().toISOString(),
+          }
+        : prev
+    )
+
+    // Reset picker
+    setSelectedPropIds([])
+    setPickerHeadline('')
+    setPickerDescription('')
+    setShowPropertyPicker(false)
+  }
+
+  // Handle removing a property from a campaign
+  const handleRemovePromotion = (promotionId: string, propertyId: string) => {
+    if (!selectedCampaign) return
+
+    setPromotions(prev => prev.filter(p => p.id !== promotionId))
+
+    setCampaigns(prev =>
+      prev.map(c =>
+        c.id === selectedCampaign.id
+          ? {
+              ...c,
+              promoted_properties: (c.promoted_properties || []).filter(pid => pid !== propertyId),
+              updated_at: new Date().toISOString(),
+            }
+          : c
+      )
+    )
+
+    setSelectedCampaign(prev =>
+      prev
+        ? {
+            ...prev,
+            promoted_properties: (prev.promoted_properties || []).filter(pid => pid !== propertyId),
+            updated_at: new Date().toISOString(),
+          }
+        : prev
+    )
+  }
+
+  // Handle editing marketing content
+  const openEditContentModal = (promo: CampaignPropertyPromotion) => {
+    setEditingPromotion(promo)
+    setEditHeadline(promo.marketing_headline || '')
+    setEditDescription(promo.marketing_description || '')
+    setEditCta(promo.cta_text || 'Book a site visit today')
+    setEditMedia((promo.media_attachments || []).join(', '))
+  }
+
+  const handleSaveEditContent = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingPromotion) return
+
+    const mediaList = editMedia
+      .split(',')
+      .map(m => m.trim())
+      .filter(Boolean)
+
+    setPromotions(prev =>
+      prev.map(p =>
+        p.id === editingPromotion.id
+          ? {
+              ...p,
+              marketing_headline: editHeadline.trim(),
+              marketing_description: editDescription.trim(),
+              cta_text: editCta.trim(),
+              media_attachments: mediaList,
+            }
+          : p
+      )
+    )
+
+    setEditingPromotion(null)
+  }
+
+  // ── Demand-Led Helper ──────────────────────────────────────────────────────
+
+  const handleApplyDemandGap = (gap: DemandGapItem) => {
+    setFormName(gap.suggested_campaign_name)
+    setFormType(gap.suggested_campaign_type)
+    setFormObjective(gap.suggested_objective)
+    setFormAudience(gap.suggested_audience)
+    setFormGeography(`${gap.short_loc}, Indore`)
+    setFormCategories([gap.suggested_category])
+    setFormTransactions([gap.suggested_transaction])
+    setFormStatus('Planned')
+    setFormBudget('60000')
+    setFormTargetLeads('40')
+    setFormTargetQualified('15')
+    setFormTargetOpps('6')
+
+    setShowDemandGapsModal(false)
+    setShowCreateModal(true)
+  }
 
   // ── Create Campaign Form Handlers ──────────────────────────────────────────
 
@@ -487,6 +737,16 @@ function CampaignsContent() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Demand-Led Promotion Helper Button */}
+            <Button
+              variant="outline"
+              onClick={() => setShowDemandGapsModal(true)}
+              className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 shadow-xs"
+              title="Suggest new campaigns based on market demand-supply gaps"
+            >
+              <TrendingUp size={16} className="mr-1.5 text-indigo-600" /> Suggest from Demand Gaps
+            </Button>
+
             <Button
               onClick={() => { resetCreateForm(); setShowCreateModal(true) }}
               className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
@@ -892,15 +1152,82 @@ function CampaignsContent() {
           </form>
         </Dialog>
 
+        {/* ── Demand Gaps Helper Modal ────────────────────────────────────── */}
+        <Dialog
+          open={showDemandGapsModal}
+          onClose={() => setShowDemandGapsModal(false)}
+          title="Demand-Led Campaign Recommendations"
+          className="max-w-2xl"
+        >
+          <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3.5 flex items-start gap-3">
+              <TrendingUp size={20} className="text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-indigo-900">Unmet Market Demand Detected</h4>
+                <p className="text-xs text-indigo-700 mt-0.5">
+                  The Demand-Supply engine analyzed active buyer/tenant requirements against available inventory.
+                  These micro-locations have high demand deficits—prime candidates for targeted acquisition campaigns.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {demandGaps.map(gap => (
+                <div
+                  key={gap.id}
+                  className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-4 shadow-xs transition-all space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <ShortLocBadge code={gap.short_loc} />
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          {gap.category_label}
+                        </span>
+                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-300">
+                          Gap: +{gap.gap} Unmet
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900 mt-1.5">{gap.suggested_campaign_name}</h4>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={() => handleApplyDemandGap(gap)}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs shrink-0"
+                    >
+                      <Sparkles size={13} className="mr-1" /> Create Campaign
+                    </Button>
+                  </div>
+
+                  <p className="text-xs text-slate-600">{gap.suggested_objective}</p>
+
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-t border-slate-100">
+                    <span>Active Requirements: <strong className="text-slate-700">{gap.demand_count}</strong></span>
+                    <span>Available Properties: <strong className="text-slate-700">{gap.supply_count}</strong></span>
+                    <span>Target Audience: <strong className="text-indigo-600">{gap.suggested_audience.join(', ')}</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-200">
+              <Button variant="outline" onClick={() => setShowDemandGapsModal(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+
         {/* ── Campaign Detail View Modal ───────────────────────────────────── */}
         {selectedCampaign && (
           <Dialog
             open={!!selectedCampaign}
             onClose={() => setSelectedCampaign(null)}
             title="Campaign Details"
-            className="max-w-3xl"
+            className="max-w-4xl"
           >
-            <div className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
+            <div className="space-y-5 max-h-[82vh] overflow-y-auto pr-1">
               {/* Header Info */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1010,8 +1337,8 @@ function CampaignsContent() {
                   }`}
                 >
                   <Building2 size={14} /> Promoted Properties
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 text-slate-600">
-                    {selectedCampaign.promoted_properties?.length || 0}
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-700 font-bold">
+                    {campaignPromotions.length}
                   </span>
                 </button>
                 <button
@@ -1097,50 +1424,202 @@ function CampaignsContent() {
                 </div>
               )}
 
-              {/* Tab 2: Promoted Properties (Placeholder) */}
+              {/* Tab 2: Promoted Properties (Full Interactive Table) */}
               {detailTab === 'properties' && (
                 <div className="space-y-4 pt-1">
-                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center space-y-3 bg-slate-50/50">
-                    <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                      <Building2 size={20} />
-                    </div>
+                  {/* Action Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-800">Promoted Properties</h4>
-                      <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                        Link specific inventory units to promote in this campaign. This module will allow selecting properties from the inventory and tracking impressions, clicks, and property-specific inquiries.
+                      <h3 className="text-sm font-bold text-slate-900">
+                        Promoted Properties ({campaignPromotions.length})
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Properties attached to this campaign receive custom marketing headlines, CTAs, and attribution tracking.
                       </p>
                     </div>
 
-                    {selectedCampaign.promoted_properties && selectedCampaign.promoted_properties.length > 0 ? (
-                      <div className="pt-2">
-                        <span className="text-xs font-semibold text-slate-700 block mb-2">Attached Inventory Units:</span>
-                        <div className="flex flex-wrap justify-center gap-2">
-                          {selectedCampaign.promoted_properties.map(pid => {
-                            const prop = MOCK_PROPERTIES.find(p => p.id === pid)
-                            return (
-                              <div key={pid} className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-left text-xs shadow-sm">
-                                <span className="font-mono font-bold text-indigo-600">{pid}</span>
-                                <span className="text-slate-600 ml-2">{prop?.short_loc || 'Indore Property'}</span>
-                                <span className="text-slate-400 ml-2">({prop ? formatPrice(prop.price, prop.category) : '—'})</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-slate-400 pt-1">
-                        No specific properties currently linked. General campaign for area & category promotion.
-                      </div>
-                    )}
-
-                    <div className="inline-block mt-3 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                      Feature expansion: Promoted property inventory linkage coming in the next release
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowDemandGapsModal(true)}
+                        className="text-xs text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                      >
+                        <TrendingUp size={13} className="mr-1 text-indigo-600" /> Demand Gaps
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedPropIds([])
+                          setShowPropertyPicker(true)
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs shadow-xs"
+                      >
+                        <Plus size={14} className="mr-1" /> Add Property to Campaign
+                      </Button>
                     </div>
                   </div>
+
+                  {/* Promoted Properties Table */}
+                  {campaignPromotions.length > 0 ? (
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left">
+                          <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                            <tr>
+                              <th className="py-2.5 px-3">Property ID</th>
+                              <th className="py-2.5 px-3">ShortLoc</th>
+                              <th className="py-2.5 px-3">Category</th>
+                              <th className="py-2.5 px-3 text-right">Price / Rent</th>
+                              <th className="py-2.5 px-3">Verification</th>
+                              <th className="py-2.5 px-3 text-center">Enquiries</th>
+                              <th className="py-2.5 px-3">Marketing Headline & CTA</th>
+                              <th className="py-2.5 px-3 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {campaignPromotions.map(promo => {
+                              const prop = MOCK_PROPERTIES.find(p => p.id === promo.property_id)
+                              const v = getVerificationStatus(prop?.last_verified_at || null)
+                              const allAssocs = getPropertyCampaigns(promo.property_id)
+
+                              return (
+                                <tr key={promo.id} className="hover:bg-slate-50/80 transition-colors">
+                                  {/* Property ID */}
+                                  <td className="py-2.5 px-3 font-mono font-semibold text-slate-900 whitespace-nowrap">
+                                    <div className="flex flex-col">
+                                      <span>{promo.property_id}</span>
+                                      {allAssocs.length > 1 && (
+                                        <span className="text-[10px] text-purple-600 font-normal">
+                                          In {allAssocs.length} campaigns
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* ShortLoc */}
+                                  <td className="py-2.5 px-3">
+                                    <div>
+                                      <ShortLocBadge code={prop?.short_loc || '—'} />
+                                      {prop?.address && (
+                                        <p className="text-[11px] text-slate-400 truncate max-w-[160px] mt-0.5">
+                                          {prop.address}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Category */}
+                                  <td className="py-2.5 px-3 whitespace-nowrap">
+                                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                                      {prop ? formatCategory(prop.category) : '—'}
+                                    </span>
+                                  </td>
+
+                                  {/* Price / Rent */}
+                                  <td className="py-2.5 px-3 text-right font-semibold text-slate-900 whitespace-nowrap">
+                                    {prop ? formatPrice(prop.price, prop.category) : '—'}
+                                  </td>
+
+                                  {/* Verification Status */}
+                                  <td className="py-2.5 px-3 whitespace-nowrap">
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                        v.isStale
+                                          ? 'bg-red-50 text-red-700 border border-red-200'
+                                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      }`}
+                                    >
+                                      {v.isStale && <AlertTriangle size={10} />}
+                                      {v.label}
+                                    </span>
+                                  </td>
+
+                                  {/* Enquiries / Leads Count */}
+                                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs border border-indigo-200">
+                                      <Users size={11} /> {promo.enquiries_count || 0}
+                                    </span>
+                                  </td>
+
+                                  {/* Marketing Headline & CTA */}
+                                  <td className="py-2.5 px-3">
+                                    <div className="max-w-xs">
+                                      <p className="font-semibold text-slate-800 line-clamp-1 text-xs">
+                                        {promo.marketing_headline || '—'}
+                                      </p>
+                                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                                          CTA: {promo.cta_text || 'Default'}
+                                        </span>
+                                        {promo.media_attachments && promo.media_attachments.length > 0 && (
+                                          <span className="text-[10px] text-slate-400">
+                                            • {promo.media_attachments.length} media
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  {/* Actions */}
+                                  <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => openEditContentModal(promo)}
+                                        className="h-7 px-2 text-xs text-slate-600 hover:text-indigo-600"
+                                        title="Edit Marketing Content"
+                                      >
+                                        <Edit3 size={13} className="mr-1" /> Edit
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleRemovePromotion(promo.id, promo.property_id)}
+                                        className="h-7 px-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                        title="Remove property association from this campaign"
+                                      >
+                                        <Trash2 size={13} className="mr-1" /> Remove
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center space-y-3 bg-slate-50/50">
+                      <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                        <Building2 size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-800">No Properties Promoted Yet</h4>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                          Attach existing inventory units to promote in this campaign. Properties can have campaign-specific marketing headlines, custom CTAs, and multi-campaign exposure.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 pt-2">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPropIds([])
+                            setShowPropertyPicker(true)
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+                        >
+                          <Plus size={14} className="mr-1" /> Add Property to Campaign
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Tab 3: Leads Generated (Placeholder / Attributed Mock Leads) */}
+              {/* Tab 3: Leads Generated (Attributed Mock Leads) */}
               {detailTab === 'leads' && (
                 <div className="space-y-4 pt-1">
                   {getLinkedLeads(selectedCampaign.id).length > 0 ? (
@@ -1150,7 +1629,7 @@ function CampaignsContent() {
                           Attributed Leads ({getLinkedLeads(selectedCampaign.id).length})
                         </span>
                         <span className="text-[11px] text-slate-500">
-                          Auto-tracked via campaign source & UTM tagging
+                          Auto-tracked via campaign source & UTM attribution
                         </span>
                       </div>
                       <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
@@ -1209,6 +1688,356 @@ function CampaignsContent() {
                 </Button>
               </div>
             </div>
+          </Dialog>
+        )}
+
+        {/* ── "+ Add Property to Campaign" Picker Dialog ──────────────────── */}
+        <Dialog
+          open={showPropertyPicker}
+          onClose={() => setShowPropertyPicker(false)}
+          title={`Add Properties to Campaign: ${selectedCampaign?.name || ''}`}
+          className="max-w-3xl"
+        >
+          <form onSubmit={handleAddPropertiesSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+            {/* Filter Bar */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Search ShortLoc, ID, address…"
+                    value={pickerSearch}
+                    onChange={e => setPickerSearch(e.target.value)}
+                    className="h-8 text-xs pl-8"
+                  />
+                </div>
+
+                <Select
+                  value={pickerCategory}
+                  onChange={e => setPickerCategory(e.target.value)}
+                  className="h-8 text-xs w-full"
+                >
+                  <option value="">All Categories</option>
+                  <option value="BUY_SELL_FLAT">Buy-Sell Flat</option>
+                  <option value="RENTAL_RESIDENTIAL">Rental Residential</option>
+                  <option value="RENTAL_COMMERCIAL">Rental Commercial</option>
+                  <option value="PLOT">Plot/Jameen</option>
+                </Select>
+
+                <Select
+                  value={pickerLocation}
+                  onChange={e => setPickerLocation(e.target.value)}
+                  className="h-8 text-xs w-full"
+                >
+                  <option value="">All Locations</option>
+                  {COMMON_SHORT_LOCS.map(loc => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </Select>
+              </div>
+
+              {/* Property Collection Shortcut Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-slate-200/80">
+                <div className="text-xs text-slate-600 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-indigo-600 shrink-0" />
+                  <span>
+                    Collection Match: <strong>{availableFilteredProperties.length}</strong> available properties match filter.
+                  </span>
+                </div>
+
+                {availableFilteredProperties.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSelectAllFiltered}
+                    className="h-7 text-xs text-indigo-700 border-indigo-300 hover:bg-indigo-50"
+                  >
+                    <CheckSquare size={13} className="mr-1 text-indigo-600" />
+                    {availableFilteredProperties.every(p => selectedPropIds.includes(p.id))
+                      ? 'Deselect Matching'
+                      : `Select Entire Collection (${availableFilteredProperties.length})`}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Inventory Property Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th className="py-2 px-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={
+                          availableFilteredProperties.length > 0 &&
+                          availableFilteredProperties.every(p => selectedPropIds.includes(p.id))
+                        }
+                        onChange={handleSelectAllFiltered}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </th>
+                    <th className="py-2 px-3">Property ID</th>
+                    <th className="py-2 px-3">ShortLoc</th>
+                    <th className="py-2 px-3">Category</th>
+                    <th className="py-2 px-3 text-right">Price/Rent</th>
+                    <th className="py-2 px-3">Status</th>
+                    <th className="py-2 px-3">Campaign Associations</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredInventoryProperties.map(prop => {
+                    const isAlreadyInThis = currentlyPromotedPropIds.has(prop.id)
+                    const isChecked = selectedPropIds.includes(prop.id)
+                    const otherCampaigns = getPropertyCampaigns(prop.id).filter(
+                      c => c.campaign?.id !== selectedCampaign?.id
+                    )
+
+                    return (
+                      <tr
+                        key={prop.id}
+                        onClick={() => {
+                          if (!isAlreadyInThis) toggleSelectProperty(prop.id)
+                        }}
+                        className={`transition-colors cursor-pointer ${
+                          isAlreadyInThis
+                            ? 'bg-slate-50/60 opacity-60 cursor-not-allowed'
+                            : isChecked
+                            ? 'bg-indigo-50/50'
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            disabled={isAlreadyInThis}
+                            checked={isChecked}
+                            onChange={() => toggleSelectProperty(prop.id)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                        </td>
+                        <td className="py-2 px-3 font-mono font-bold text-slate-800">
+                          {prop.id}
+                        </td>
+                        <td className="py-2 px-3">
+                          <ShortLocBadge code={prop.short_loc} />
+                        </td>
+                        <td className="py-2 px-3">
+                          {formatCategory(prop.category)}
+                        </td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-800 whitespace-nowrap">
+                          {formatPrice(prop.price, prop.category)}
+                        </td>
+                        <td className="py-2 px-3 whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                            {prop.status}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          {isAlreadyInThis ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold">
+                              <Check size={12} /> In this campaign
+                            </span>
+                          ) : otherCampaigns.length > 0 ? (
+                            <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                              Also in {otherCampaigns.map(o => o.campaign?.id).join(', ')}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Available</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {filteredInventoryProperties.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-center py-6 text-slate-400 text-xs">
+                        No properties found matching current filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Campaign-Specific Marketing Content (Per-Property-Per-Campaign) */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <div>
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider block">
+                  Campaign-Specific Marketing Content
+                </span>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  This marketing copy is isolated to this campaign and does not overwrite inventory records.
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="picker_headline" className="text-xs">Marketing Headline</Label>
+                <Input
+                  id="picker_headline"
+                  placeholder="e.g. Exclusive 3BHK High-Rise Near Tech Corridor"
+                  value={pickerHeadline}
+                  onChange={e => setPickerHeadline(e.target.value)}
+                  className="mt-1 h-8 text-xs bg-white"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="picker_desc" className="text-xs">Marketing Brief / Description</Label>
+                <Textarea
+                  id="picker_desc"
+                  rows={2}
+                  placeholder="Special pitch, key highlights, or campaign-specific concessions…"
+                  value={pickerDescription}
+                  onChange={e => setPickerDescription(e.target.value)}
+                  className="mt-1 text-xs bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="picker_cta" className="text-xs">Call-to-Action (CTA) Text</Label>
+                  <Input
+                    id="picker_cta"
+                    placeholder="e.g. Book a site visit today"
+                    value={pickerCta}
+                    onChange={e => setPickerCta(e.target.value)}
+                    className="mt-1 h-8 text-xs bg-white"
+                  />
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {CTA_PRESETS.slice(0, 3).map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setPickerCta(preset)}
+                        className="text-[10px] bg-slate-200/80 hover:bg-indigo-100 hover:text-indigo-800 text-slate-600 px-1.5 py-0.5 rounded transition-colors"
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="picker_media" className="text-xs">Media Filename References (Comma separated)</Label>
+                  <Input
+                    id="picker_media"
+                    placeholder="elevation.jpg, floor_plan.pdf, walkthrough.mp4"
+                    value={pickerMedia}
+                    onChange={e => setPickerMedia(e.target.value)}
+                    className="mt-1 h-8 text-xs bg-white"
+                  />
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    Mock references: photos, videos, or brochures attached to promotion.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <span className="text-xs font-semibold text-slate-700">
+                {selectedPropIds.length} propert{selectedPropIds.length === 1 ? 'y' : 'ies'} selected
+              </span>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowPropertyPicker(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={selectedPropIds.length === 0}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Add Selected Properties ({selectedPropIds.length})
+                </Button>
+              </div>
+            </div>
+          </form>
+        </Dialog>
+
+        {/* ── Edit Marketing Content Modal ─────────────────────────────────── */}
+        {editingPromotion && (
+          <Dialog
+            open={!!editingPromotion}
+            onClose={() => setEditingPromotion(null)}
+            title={`Edit Marketing Content — ${editingPromotion.property_id}`}
+            className="max-w-lg"
+          >
+            <form onSubmit={handleSaveEditContent} className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                <span className="font-semibold text-slate-700">Campaign: </span>
+                <span className="text-slate-900">{selectedCampaign?.name}</span>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="font-mono font-bold text-indigo-600">{editingPromotion.property_id}</span>
+                  <span>•</span>
+                  <span>Enquiries: {editingPromotion.enquiries_count}</span>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit_headline" className="text-xs">Marketing Headline</Label>
+                <Input
+                  id="edit_headline"
+                  required
+                  value={editHeadline}
+                  onChange={e => setEditHeadline(e.target.value)}
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit_desc" className="text-xs">Marketing Description / Brief</Label>
+                <Textarea
+                  id="edit_desc"
+                  rows={3}
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit_cta" className="text-xs">Call-to-Action (CTA)</Label>
+                <Input
+                  id="edit_cta"
+                  value={editCta}
+                  onChange={e => setEditCta(e.target.value)}
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit_media" className="text-xs">Media Attachments (Comma separated)</Label>
+                <Input
+                  id="edit_media"
+                  value={editMedia}
+                  onChange={e => setEditMedia(e.target.value)}
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingPromotion(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Save Marketing Copy
+                </Button>
+              </div>
+            </form>
           </Dialog>
         )}
       </div>

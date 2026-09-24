@@ -25,7 +25,7 @@ import {
   Plus, ArrowLeft, Building2, MapPin,
   AlertTriangle, CheckCircle2, ShieldAlert, Sparkles, Home,
   LandPlot, Building, Eye, Edit3, X, Upload, Download,
-  FileSpreadsheet, AlertCircle, CheckCircle, Loader2
+  FileSpreadsheet, AlertCircle, CheckCircle, Loader2, Megaphone
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -39,7 +39,7 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import {
   formatPrice, formatDate, formatCategory, propertyStatusClasses,
 } from '@/lib/formatters'
-import { MOCK_PROPERTIES, MOCK_PARTIES, type PropertyRow } from '@/lib/mockData'
+import { MOCK_PROPERTIES, MOCK_PARTIES, getPropertyActivePromotions, type PropertyRow } from '@/lib/mockData'
 
 // ── Category & Status Definitions ─────────────────────────────────────────────
 
@@ -552,7 +552,25 @@ function InventoryContent() {
       key: 'id',
       header: 'Property ID',
       sortValue: (r) => r.id,
-      render: (r) => <span className="font-mono text-xs font-semibold text-slate-800">{r.id}</span>,
+      render: (r) => {
+        const promos = getPropertyActivePromotions(r.id)
+        return (
+          <div>
+            <span className="font-mono text-xs font-semibold text-slate-800">{r.id}</span>
+            {promos.length > 0 && (
+              <div className="mt-1">
+                <span
+                  title={promos.map(p => `${p.campaign.name} (${p.promotion.marketing_headline})`).join('\n')}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200"
+                >
+                  <Megaphone size={10} className="text-purple-600 shrink-0" />
+                  <span>Promoted in {promos.length} campaign{promos.length > 1 ? 's' : ''}</span>
+                </span>
+              </div>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'short_loc',
@@ -1367,6 +1385,40 @@ function InventoryContent() {
                     </div>
                   </div>
                 )}
+
+                {/* Active Marketing Campaigns Section (Read-Only) */}
+                {(() => {
+                  const activePromos = getPropertyActivePromotions(selectedProperty.id)
+                  if (activePromos.length === 0) return null
+                  return (
+                    <div className="bg-purple-50/60 border border-purple-200/80 rounded-xl p-3.5 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+                        <Megaphone size={14} className="text-purple-600" />
+                        <span>Active Marketing Campaigns ({activePromos.length})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {activePromos.map(({ campaign, promotion }) => (
+                          <div key={promotion.id} className="bg-white p-2.5 rounded-lg border border-purple-100 text-xs shadow-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-slate-900">{campaign.name}</span>
+                              <span className="px-2 py-0.2 rounded text-[10px] bg-purple-100 text-purple-800 font-medium">
+                                {campaign.type}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-1">
+                              <strong>Headline:</strong> &ldquo;{promotion.marketing_headline}&rdquo;
+                            </p>
+                            <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
+                              <span>CTA: <strong className="text-slate-600">{promotion.cta_text}</strong></span>
+                              <span>•</span>
+                              <span>Attributed Enquiries: <strong className="text-indigo-600">{promotion.enquiries_count}</strong></span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 <div className="flex items-center justify-between text-xs text-slate-400 border-t pt-3">
                   <span>Created: {formatDate(selectedProperty.created_at)}</span>
