@@ -8,10 +8,11 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   GitBranch, Plus, Search, RefreshCw, MapPin, DollarSign,
   User, Calendar, Clock, CheckCircle2, XCircle, ArrowRight,
-  TrendingUp, Percent, FileText, ChevronRight, X, Sparkles, Building2
+  TrendingUp, Percent, FileText, ChevronRight, X, Sparkles, Building2, Megaphone
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -299,6 +300,19 @@ export default function OpportunitiesPage() {
                               {opp.client_name}
                             </p>
 
+                            {/* Attributed Campaign Tag */}
+                            {opp.attributed_campaign_name && (
+                              <div className="overflow-hidden">
+                                <span
+                                  className="inline-flex items-center gap-1 text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded truncate max-w-full font-medium"
+                                  title={`Attributed Campaign: ${opp.attributed_campaign_name}`}
+                                >
+                                  <Megaphone size={9} className="shrink-0 text-indigo-500" />
+                                  <span className="truncate">{opp.attributed_campaign_name}</span>
+                                </span>
+                              </div>
+                            )}
+
                             {/* Expected Value */}
                             <div className="text-xs font-bold text-slate-900">
                               {formatPrice(opp.expected_value)}
@@ -439,6 +453,78 @@ export default function OpportunitiesPage() {
                     )}
                   </div>
                 )}
+
+                {/* ───────────────────────────────────────────────────────── */}
+                {/* MARKETING ATTRIBUTION & TRACEABILITY (READ-ONLY)         */}
+                {/* ───────────────────────────────────────────────────────── */}
+                <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 uppercase tracking-wider">
+                      <Megaphone size={13} className="text-indigo-600" />
+                      Marketing Attribution
+                    </h4>
+                    <span className="text-[10px] text-slate-500 font-medium bg-white px-2 py-0.5 rounded border border-slate-200">
+                      Inherited from Lead (Read-only)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">Originating Lead</span>
+                      {selectedOpp.originating_lead_id ? (
+                        <Link
+                          href={`/leads?search=${selectedOpp.originating_lead_id}`}
+                          className="font-semibold text-indigo-600 hover:underline font-mono text-xs inline-flex items-center gap-0.5"
+                          title="View originating lead"
+                        >
+                          {selectedOpp.originating_lead_id}
+                          <ArrowRight size={10} />
+                        </Link>
+                      ) : (
+                        <span className="text-slate-600 font-medium">Direct / Walk-in</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">Attributed Campaign</span>
+                      <span
+                        className="font-semibold text-indigo-700 truncate block"
+                        title={selectedOpp.attributed_campaign_name || 'None'}
+                      >
+                        {selectedOpp.attributed_campaign_name || 'Organic (Unlinked)'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">Source &amp; Channel</span>
+                      <span className="font-medium text-slate-700">
+                        {selectedOpp.attributed_channel_type ? `${selectedOpp.attributed_channel_type} — ` : ''}
+                        {selectedOpp.attributed_source || 'Direct Outreach'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">Marketing Executive</span>
+                      <span className="font-medium text-slate-700">
+                        {selectedOpp.marketing_executive_name || 'Neha Kapoor'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(selectedOpp.first_touch_source || selectedOpp.latest_touch_source) && (
+                    <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">First-Touch Source:</span>
+                        <span className="text-slate-600 truncate block" title={selectedOpp.first_touch_source || ''}>
+                          {selectedOpp.first_touch_source || selectedOpp.attributed_source || '—'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Latest-Touch Source:</span>
+                        <span className="text-slate-600 truncate block" title={selectedOpp.latest_touch_source || ''}>
+                          {selectedOpp.latest_touch_source || selectedOpp.attributed_source || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* ───────────────────────────────────────────────────────── */}
                 {/* NEGOTIATION HISTORY ROUNDS                                */}

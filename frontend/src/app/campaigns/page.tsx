@@ -23,13 +23,14 @@
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import {
   Megaphone, Plus, Search, Calendar, Users, Target, Building2,
   TrendingUp, CheckCircle2, Clock, AlertCircle, PauseCircle,
   XCircle, Eye, ArrowRight, Layers, Tag, MapPin, IndianRupee,
   FileText, Check, ChevronRight, BarChart3, ShieldCheck,
   Trash2, Edit3, Image, Video, Sparkles, Filter, CheckSquare,
-  Square, AlertTriangle, ExternalLink, ArrowUpRight
+  Square, AlertTriangle, ExternalLink, ArrowUpRight, GitFork, Briefcase
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
@@ -43,7 +44,7 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { formatPrice, formatDate, formatCategory } from '@/lib/formatters'
 import {
   MOCK_CAMPAIGNS, MOCK_LEADS, MOCK_USERS, MOCK_PROPERTIES,
-  MOCK_CAMPAIGN_PROMOTIONS, getDemandGaps,
+  MOCK_CAMPAIGN_PROMOTIONS, getDemandGaps, getMarketingTraceableChains,
   type CampaignRow, type CampaignType, type CampaignStatus,
   type TargetAudienceType, type PropertyCategoryType, type TransactionType,
   type LeadRow, type CampaignPropertyPromotion, type DemandGapItem, type PropertyRow
@@ -1619,81 +1620,240 @@ function CampaignsContent() {
                 </div>
               )}
 
-              {/* Tab 3: Leads Generated (Attributed Mock Leads) */}
-              {detailTab === 'leads' && (
-                <div className="space-y-4 pt-1">
-                  {getLinkedLeads(selectedCampaign.id).length > 0 ? (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">
-                          Attributed Leads ({getLinkedLeads(selectedCampaign.id).length})
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          Auto-tracked via campaign source & UTM attribution
-                        </span>
-                      </div>
-                      <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-                        {getLinkedLeads(selectedCampaign.id).map(lead => (
-                          <div key={lead.id} className="p-3 hover:bg-slate-50 flex items-center justify-between text-xs">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-slate-900">{lead.party_name}</span>
-                                <span className="font-mono text-[10px] text-slate-400">{lead.id}</span>
-                                <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">
-                                  {lead.lead_type}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                {lead.channel_type && (
-                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
-                                    lead.channel_type === 'Digital' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-amber-50 text-amber-800 border-amber-200'
-                                  }`}>
-                                    {lead.channel_type}
-                                  </span>
-                                )}
-                                <span className="text-[11px] text-slate-700 font-medium">{lead.source || 'Campaign Direct'}</span>
-                                {lead.referral_code && (
-                                  <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1 py-0.2 rounded border border-slate-200">
-                                    {lead.referral_code}
-                                  </span>
-                                )}
-                                <span className="text-slate-300">•</span>
-                                <span className="text-[11px] text-slate-500">Assigned: {lead.assigned_to_name || 'Unassigned'}</span>
-                              </div>
-                              {lead.ad_reference && (
-                                <p className="text-[10px] text-slate-400 mt-0.5 truncate">{lead.ad_reference}</p>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <span className="font-semibold text-slate-800 block">
-                                {lead.value ? formatPrice(lead.value) : '—'}
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                {formatDate(lead.created_at)}
-                              </span>
-                            </div>
+              {/* Tab 3: Leads Generated (Attributed Mock Leads & 4-Step Progression Funnel) */}
+              {detailTab === 'leads' && (() => {
+                const linkedChains = getMarketingTraceableChains().filter(
+                  (c) => c.campaign_id === selectedCampaign.id
+                )
+                const totalLeads = linkedChains.length
+                const qualifiedLeads = linkedChains.filter(
+                  (c) => c.lead_status === 'QUALIFIED' || c.opportunity_id !== null
+                ).length
+                const oppsCount = linkedChains.filter((c) => c.opportunity_id !== null).length
+                const closedDeals = linkedChains.filter((c) => c.deal_status === 'Won')
+                const closedCount = closedDeals.length
+                const closedRevenue = closedDeals.reduce((sum, c) => sum + (c.deal_value || 0), 0)
+                const totalCommission = closedDeals.reduce((sum, c) => sum + (c.commission_amount || 0), 0)
+
+                const leadToQualRate = totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0
+                const qualToOppRate = qualifiedLeads > 0 ? Math.round((oppsCount / qualifiedLeads) * 100) : 0
+                const oppToDealRate = oppsCount > 0 ? Math.round((closedCount / oppsCount) * 100) : 0
+                const overallConversionRate = totalLeads > 0 ? Math.round((closedCount / totalLeads) * 100) : 0
+
+                return (
+                  <div className="space-y-4 pt-1">
+                    {/* 4-Step Progression Funnel Breakdown */}
+                    <div className="bg-slate-900 text-white rounded-xl p-4 shadow-sm border border-slate-800 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <GitFork size={13} />
+                            Lifecycle Progression Funnel
+                          </span>
+                          <h4 className="text-sm font-bold text-white mt-0.5">
+                            4-Step Campaign Conversion Pipeline
+                          </h4>
+                        </div>
+                        {totalLeads > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700">
+                              Overall Lead-to-Deal: <strong className="text-emerald-400">{overallConversionRate}%</strong>
+                            </span>
+                            <Link
+                              href={`/marketing-traceability?campaign=${selectedCampaign.id}`}
+                              className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-2.5 py-1 rounded-lg inline-flex items-center gap-1 transition-colors"
+                            >
+                              <span>Traceability View</span>
+                              <ArrowRight size={12} />
+                            </Link>
                           </div>
-                        ))}
+                        )}
                       </div>
+
+                      {/* Funnel Step Cards */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 pt-1">
+                        {/* Step 1: Leads */}
+                        <div className="bg-slate-800/80 rounded-lg p-3 border border-slate-700/80">
+                          <div className="flex items-center justify-between text-slate-400 text-[10px] font-semibold uppercase">
+                            <span>Step 1 • Leads</span>
+                            <Users size={12} className="text-indigo-400" />
+                          </div>
+                          <div className="mt-1 flex items-baseline gap-1.5">
+                            <span className="text-2xl font-black text-white">{totalLeads}</span>
+                            <span className="text-[10px] text-slate-400">Captured</span>
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>Attributed</span>
+                            <span className="text-slate-200 font-medium">100% origin</span>
+                          </div>
+                        </div>
+
+                        {/* Step 2: Qualified */}
+                        <div className="bg-slate-800/80 rounded-lg p-3 border border-slate-700/80">
+                          <div className="flex items-center justify-between text-slate-400 text-[10px] font-semibold uppercase">
+                            <span>Step 2 • Qualified</span>
+                            <CheckCircle2 size={12} className="text-blue-400" />
+                          </div>
+                          <div className="mt-1 flex items-baseline gap-1.5">
+                            <span className="text-2xl font-black text-blue-400">{qualifiedLeads}</span>
+                            <span className="text-[10px] text-blue-300 font-medium">
+                              {leadToQualRate}% conv.
+                            </span>
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>Drop-off</span>
+                            <span className="text-rose-400 font-medium">{Math.max(0, totalLeads - qualifiedLeads)} leads</span>
+                          </div>
+                        </div>
+
+                        {/* Step 3: Opportunities */}
+                        <div className="bg-slate-800/80 rounded-lg p-3 border border-slate-700/80">
+                          <div className="flex items-center justify-between text-slate-400 text-[10px] font-semibold uppercase">
+                            <span>Step 3 • Opportunities</span>
+                            <TrendingUp size={12} className="text-amber-400" />
+                          </div>
+                          <div className="mt-1 flex items-baseline gap-1.5">
+                            <span className="text-2xl font-black text-amber-400">{oppsCount}</span>
+                            <span className="text-[10px] text-amber-300 font-medium">
+                              {qualToOppRate}% conv.
+                            </span>
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>Pipeline Stage</span>
+                            <span className="text-slate-200 font-medium">Active Deals</span>
+                          </div>
+                        </div>
+
+                        {/* Step 4: Closed Deals */}
+                        <div className="bg-slate-800/80 rounded-lg p-3 border border-slate-700/80">
+                          <div className="flex items-center justify-between text-slate-400 text-[10px] font-semibold uppercase">
+                            <span>Step 4 • Deals Won</span>
+                            <CheckCircle2 size={12} className="text-emerald-400" />
+                          </div>
+                          <div className="mt-1 flex items-baseline gap-1.5">
+                            <span className="text-2xl font-black text-emerald-400">{closedCount}</span>
+                            <span className="text-[10px] text-emerald-300 font-medium">
+                              {oppToDealRate}% conv.
+                            </span>
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>Won Volume</span>
+                            <span className="text-emerald-400 font-semibold">{formatPrice(closedRevenue)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Revenue realization row */}
+                      {closedRevenue > 0 && (
+                        <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                            <span className="text-emerald-200 font-medium">
+                              Realized Value from Campaign:
+                            </span>
+                            <span className="text-white font-bold">{formatPrice(closedRevenue)} Closed</span>
+                          </div>
+                          <div className="text-emerald-300 text-xs font-semibold">
+                            Earned Commission: <span className="text-white font-bold">{formatPrice(totalCommission)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center space-y-3 bg-slate-50/50">
-                      <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                        <Users size={20} />
+
+                    {/* Attributed Records Table */}
+                    {linkedChains.length > 0 ? (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">
+                            Attributed Leads &amp; Lifecycle Progress ({linkedChains.length})
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            End-to-End Traceability
+                          </span>
+                        </div>
+                        <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                          {linkedChains.map((chain) => (
+                            <div key={chain.id} className="p-3 hover:bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-slate-900">{chain.lead_name}</span>
+                                  <Link
+                                    href={`/leads?search=${chain.lead_id}`}
+                                    className="font-mono text-[10px] text-indigo-600 hover:underline"
+                                    title="View lead"
+                                  >
+                                    {chain.lead_id}
+                                  </Link>
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-100 text-slate-600 font-medium">
+                                    Lead: {chain.lead_status}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                  {chain.channel_type && (
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold border ${
+                                      chain.channel_type === 'Digital' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                                    }`}>
+                                      {chain.channel_type}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-slate-700 font-medium">{chain.lead_source}</span>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="text-[11px] text-slate-500">Owner: {chain.marketing_executive || 'Unassigned'}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 sm:text-right">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Opportunity</span>
+                                  {chain.opportunity_id ? (
+                                    <Link
+                                      href="/opportunities"
+                                      className="font-mono text-xs font-semibold text-blue-600 hover:underline"
+                                    >
+                                      {chain.opportunity_id} ({chain.opportunity_stage})
+                                    </Link>
+                                  ) : (
+                                    <span className="text-xs text-slate-400 italic">No opportunity yet</span>
+                                  )}
+                                </div>
+                                <div className="min-w-[90px]">
+                                  <span className="text-[10px] text-slate-400 block">Deal Outcome</span>
+                                  {chain.deal_status === 'Won' ? (
+                                    <span className="font-bold text-emerald-700 text-xs inline-flex items-center gap-1">
+                                      <CheckCircle2 size={12} /> {formatPrice(chain.deal_value || 0)}
+                                    </span>
+                                  ) : chain.deal_status === 'Lost' ? (
+                                    <span className="text-xs text-rose-600 font-medium">Lost</span>
+                                  ) : chain.opportunity_id ? (
+                                    <span className="text-xs text-amber-600 font-medium">In Pipeline</span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">Lead Stage</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-slate-800">Leads Generated</h4>
-                        <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                          Leads acquired through landing pages, telecalling, or ad attribution will be automatically linked to this campaign.
-                        </p>
+                    ) : (
+                      <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center space-y-3 bg-slate-50/50">
+                        <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                          <Users size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-800">Leads Generated</h4>
+                          <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                            Leads acquired through landing pages, telecalling, or ad attribution will be automatically linked to this campaign.
+                          </p>
+                        </div>
+                        <div className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          0 leads currently attributed to this campaign
+                        </div>
                       </div>
-                      <div className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        0 leads currently attributed to this campaign
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Close Button */}
               <div className="flex justify-end pt-3 border-t border-slate-200">

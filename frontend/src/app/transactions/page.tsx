@@ -12,7 +12,7 @@ import {
   Receipt, Search, Filter, Plus, MapPin, DollarSign,
   TrendingUp, Calendar, CheckCircle2, Clock, AlertCircle,
   Eye, ExternalLink, ArrowUpDown, Building2, User, X, FileText,
-  Percent, ArrowRight
+  Percent, ArrowRight, Megaphone
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -424,6 +424,7 @@ export default function TransactionsPage() {
                   <th className="py-3 px-4 text-right">Commission Amount</th>
                   <th className="py-3 px-4 text-center">Comm %</th>
                   <th className="py-3 px-4 text-center">Payment Status</th>
+                  <th className="py-3 px-4">Marketing Attribution</th>
                   <th className="py-3 px-4">Closed Date</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -431,7 +432,7 @@ export default function TransactionsPage() {
               <tbody className="divide-y divide-slate-200 bg-white">
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-400">
+                    <td colSpan={12} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center">
                         <Receipt className="w-10 h-10 text-slate-300 mb-2" />
                         <p className="font-medium text-slate-600">No transactions found</p>
@@ -497,6 +498,26 @@ export default function TransactionsPage() {
                       {/* 9. Payment Status (badge) */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <PaymentBadge status={tx.payment_status} />
+                      </td>
+
+                      {/* Marketing Attribution */}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {tx.attributed_campaign_name ? (
+                          <div className="space-y-0.5 max-w-[160px]">
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-medium truncate max-w-full"
+                              title={`Campaign: ${tx.attributed_campaign_name}`}
+                            >
+                              <Megaphone size={9} className="shrink-0 text-indigo-500" />
+                              <span className="truncate">{tx.attributed_campaign_name}</span>
+                            </span>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {tx.attributed_source || 'Direct Outreach'}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">Direct / Organic</span>
+                        )}
                       </td>
 
                       {/* 10. Closed Date */}
@@ -614,6 +635,75 @@ export default function TransactionsPage() {
                       <p className="font-medium text-slate-900">{selectedTxn.staff_name}</p>
                       <p className="text-xs text-slate-500">{selectedTxn.staff_role}</p>
                     </div>
+                  </div>
+
+                  {/* Marketing Attribution Section */}
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Megaphone size={14} className="text-indigo-600" />
+                        Marketing Attribution &amp; Origin
+                      </span>
+                      <span className="text-[10px] bg-indigo-100/80 text-indigo-800 font-semibold px-2 py-0.5 rounded-full border border-indigo-200">
+                        Read-Only Heritage
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block font-medium">Originating Lead</span>
+                        {selectedTxn.originating_lead_id ? (
+                          <Link
+                            href={`/leads?search=${selectedTxn.originating_lead_id}`}
+                            className="font-semibold text-indigo-600 hover:underline font-mono text-xs inline-flex items-center gap-0.5"
+                          >
+                            {selectedTxn.originating_lead_id}
+                            <ArrowRight size={10} />
+                          </Link>
+                        ) : (
+                          <span className="text-slate-600 font-medium">Direct / Walk-in</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 block font-medium">Attributed Campaign</span>
+                        <span
+                          className="font-semibold text-indigo-700 truncate block"
+                          title={selectedTxn.attributed_campaign_name || 'Organic'}
+                        >
+                          {selectedTxn.attributed_campaign_name || 'Organic (Unlinked)'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 block font-medium">Source &amp; Channel</span>
+                        <span className="font-medium text-slate-700">
+                          {selectedTxn.attributed_channel_type ? `${selectedTxn.attributed_channel_type} — ` : ''}
+                          {selectedTxn.attributed_source || 'Direct Outreach'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 block font-medium">Marketing Executive</span>
+                        <span className="font-medium text-slate-700">
+                          {selectedTxn.marketing_executive_name || 'Neha Kapoor'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {(selectedTxn.first_touch_source || selectedTxn.latest_touch_source) && (
+                      <div className="pt-2 border-t border-indigo-100/70 grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-[10px] text-slate-500 block">First-Touch Source:</span>
+                          <span className="text-slate-600 truncate block">
+                            {selectedTxn.first_touch_source || selectedTxn.attributed_source || '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 block">Latest-Touch Source:</span>
+                          <span className="text-slate-600 truncate block">
+                            {selectedTxn.latest_touch_source || selectedTxn.attributed_source || '—'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {selectedTxn.notes && (

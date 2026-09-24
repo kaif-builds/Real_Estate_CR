@@ -1875,6 +1875,15 @@ export interface PipelineOpportunityRow {
   negotiation_history: NegotiationRound[]
   created_at: string
   closed_at?: string | null
+  // ── Lead Attribution & Traceability ──
+  originating_lead_id?: string | null
+  attributed_campaign_id?: string | null
+  attributed_campaign_name?: string | null
+  attributed_channel_type?: ChannelType | null
+  attributed_source?: string | null
+  marketing_executive_name?: string | null
+  first_touch_source?: string | null
+  latest_touch_source?: string | null
 }
 
 export const MOCK_PIPELINE_OPPORTUNITIES: PipelineOpportunityRow[] = [
@@ -1889,6 +1898,14 @@ export const MOCK_PIPELINE_OPPORTUNITIES: PipelineOpportunityRow[] = [
     probability: 75,
     agent_id: 'u3',
     agent_name: 'Ravi Mehta',
+    originating_lead_id: 'L-1005',
+    attributed_campaign_id: 'CMP-2026-001',
+    attributed_campaign_name: 'Super Corridor Tech Hub Promotion',
+    attributed_channel_type: 'Digital',
+    attributed_source: 'Social Media',
+    marketing_executive_name: 'Neha Kapoor',
+    first_touch_source: 'Social Media (Meta Carousel Ad)',
+    latest_touch_source: 'Social Media (WhatsApp Inbound)',
     negotiation_history: [
       {
         round: 1,
@@ -1928,6 +1945,14 @@ export const MOCK_PIPELINE_OPPORTUNITIES: PipelineOpportunityRow[] = [
     probability: 100,
     agent_id: 'u2',
     agent_name: 'Neha Kapoor',
+    originating_lead_id: 'L-1001',
+    attributed_campaign_id: 'CMP-2026-002',
+    attributed_campaign_name: 'Scheme 140 Luxury High-Rise Influx',
+    attributed_channel_type: 'Digital',
+    attributed_source: 'Website',
+    marketing_executive_name: 'Neha Kapoor',
+    first_touch_source: 'Website (Direct Inbound)',
+    latest_touch_source: 'Landing Page (/lp/scheme-140)',
     negotiation_history: [
       {
         round: 1,
@@ -1952,6 +1977,14 @@ export const MOCK_PIPELINE_OPPORTUNITIES: PipelineOpportunityRow[] = [
     probability: 90,
     agent_id: 'u5',
     agent_name: 'Priya Sharma',
+    originating_lead_id: 'L-1007',
+    attributed_campaign_id: 'CMP-2026-002',
+    attributed_campaign_name: 'Scheme 140 Luxury High-Rise Influx',
+    attributed_channel_type: 'Digital',
+    attributed_source: 'Landing Page',
+    marketing_executive_name: 'Aman Desai',
+    first_touch_source: 'Search/Display Ad (Google Search)',
+    latest_touch_source: 'Landing Page (/landing/scheme-140-penthouses)',
     negotiation_history: [
       {
         round: 1,
@@ -1975,6 +2008,14 @@ export const MOCK_PIPELINE_OPPORTUNITIES: PipelineOpportunityRow[] = [
     probability: 50,
     agent_id: 'u7',
     agent_name: 'Sanjay Verma',
+    originating_lead_id: 'L-1010',
+    attributed_campaign_id: null,
+    attributed_campaign_name: null,
+    attributed_channel_type: 'Digital',
+    attributed_source: 'Property Portal',
+    marketing_executive_name: 'Ravi Mehta',
+    first_touch_source: 'Property Portal (99acres)',
+    latest_touch_source: 'Property Portal (99acres Verified Owner)',
     negotiation_history: [],
     created_at: '2026-09-15T11:00:00Z',
   },
@@ -2052,6 +2093,15 @@ export interface TransactionRow {
   payment_status: 'Paid' | 'Partial' | 'Pending'
   closed_date: string
   notes?: string
+  // ── Lead Attribution & Traceability ──
+  originating_lead_id?: string | null
+  attributed_campaign_id?: string | null
+  attributed_campaign_name?: string | null
+  attributed_channel_type?: ChannelType | null
+  attributed_source?: string | null
+  marketing_executive_name?: string | null
+  first_touch_source?: string | null
+  latest_touch_source?: string | null
 }
 
 export const MOCK_TRANSACTIONS: TransactionRow[] = [
@@ -2139,6 +2189,14 @@ export const MOCK_TRANSACTIONS: TransactionRow[] = [
     payment_status: 'Paid',
     closed_date: '2026-09-12',
     notes: 'Full 1-month brokerage paid upon agreement registration.',
+    originating_lead_id: 'L-1001',
+    attributed_campaign_id: 'CMP-2026-002',
+    attributed_campaign_name: 'Scheme 140 Luxury High-Rise Influx',
+    attributed_channel_type: 'Digital',
+    attributed_source: 'Website',
+    marketing_executive_name: 'Neha Kapoor',
+    first_touch_source: 'Website (Direct Inbound)',
+    latest_touch_source: 'Landing Page (/lp/scheme-140)',
   },
   {
     id: 'TXN-802',
@@ -2156,6 +2214,14 @@ export const MOCK_TRANSACTIONS: TransactionRow[] = [
     payment_status: 'Paid',
     closed_date: '2026-09-08',
     notes: '2% sale commission cleared via RTGS from seller.',
+    originating_lead_id: 'L-1008',
+    attributed_campaign_id: 'CMP-2026-004',
+    attributed_campaign_name: 'Vijay Nagar Landlord Onboarding Q3',
+    attributed_channel_type: 'Offline',
+    attributed_source: 'Direct Marketing',
+    marketing_executive_name: 'Neha Kapoor',
+    first_touch_source: 'Direct Marketing (Door Flyer)',
+    latest_touch_source: 'Direct Marketing (Telemarketing Outreach)',
   },
   {
     id: 'TXN-803',
@@ -3073,5 +3139,85 @@ export const MOCK_TELEMARKETING_CONTACTS: TelemarketingContact[] = [
     created_at: '2026-08-15T10:00:00Z',
   },
 ]
+
+// ── Lead Attribution & Marketing Traceability ─────────────────────────────────
+
+export interface TraceableChainRow {
+  id: string
+  campaign_id?: string | null
+  campaign_name?: string | null
+  lead_id: string
+  lead_name: string
+  lead_source: string
+  channel_type?: ChannelType | null
+  lead_created_at: string
+  lead_status: string
+  opportunity_id?: string | null
+  opportunity_stage?: string | null
+  opportunity_expected_value?: number | null
+  deal_id?: string | null
+  deal_status: 'Won' | 'Lost' | 'In Progress' | 'Not yet reached'
+  deal_value?: number | null
+  commission_amount?: number | null
+  closed_date?: string | null
+  marketing_executive?: string | null
+  first_touch_source?: string | null
+  latest_touch_source?: string | null
+}
+
+export function getMarketingTraceableChains(): TraceableChainRow[] {
+  const chains: TraceableChainRow[] = []
+
+  for (const lead of MOCK_LEADS) {
+    // Find matching opportunity by lead ID or client party ID
+    const opp = MOCK_PIPELINE_OPPORTUNITIES.find(
+      (o) => o.originating_lead_id === lead.id || o.client_id === lead.party_id
+    )
+
+    // Find matching transaction by opportunity ID
+    const txn = opp
+      ? MOCK_TRANSACTIONS.find((t) => t.opportunity_id === opp.id)
+      : null
+
+    let deal_status: 'Won' | 'Lost' | 'In Progress' | 'Not yet reached' = 'Not yet reached'
+    if (txn || opp?.stage === 'WON') {
+      deal_status = 'Won'
+    } else if (opp?.stage === 'LOST' || lead.status === 'LOST') {
+      deal_status = 'Lost'
+    } else if (opp) {
+      deal_status = 'In Progress'
+    }
+
+    chains.push({
+      id: `trace-${lead.id}`,
+      campaign_id: lead.campaign_id || opp?.attributed_campaign_id || null,
+      campaign_name: lead.campaign_name || opp?.attributed_campaign_name || null,
+      lead_id: lead.id,
+      lead_name: lead.party_name,
+      lead_source: lead.source
+        ? `${lead.channel_type ? `${lead.channel_type} — ` : ''}${lead.source}`
+        : 'Direct / Unspecified',
+      channel_type: lead.channel_type || null,
+      lead_created_at: lead.created_at || new Date().toISOString(),
+      lead_status: lead.status,
+      opportunity_id: opp?.id || null,
+      opportunity_stage: opp?.stage || 'Not yet an Opportunity',
+      opportunity_expected_value: opp?.expected_value || lead.value || null,
+      deal_id: txn?.id || null,
+      deal_status,
+      deal_value: txn?.transaction_value || (opp?.stage === 'WON' ? opp.expected_value : null),
+      commission_amount:
+        txn?.commission_amount ||
+        (opp?.stage === 'WON' ? (opp.expected_value ? Math.round(opp.expected_value * 0.02) : null) : null),
+      closed_date: txn?.closed_date || opp?.closed_at || null,
+      marketing_executive:
+        opp?.marketing_executive_name || lead.assigned_to_name || 'Neha Kapoor',
+      first_touch_source: opp?.first_touch_source || lead.source || 'Direct Outreach',
+      latest_touch_source: opp?.latest_touch_source || lead.source || 'Direct Outreach',
+    })
+  }
+
+  return chains
+}
 
 
