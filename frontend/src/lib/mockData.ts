@@ -144,6 +144,61 @@ export interface CampaignPropertyPromotion {
   added_at: string
 }
 
+// ── Telemarketing Campaign Types ───────────────────────────────────────────────
+
+export type TelemarketingCampaignStatus = 'Draft' | 'Active' | 'Paused' | 'Completed'
+
+export type TelemarketingPurpose =
+  | 'Cold Calling'
+  | 'Market Survey'
+  | 'Owner Acquisition'
+  | 'Buyer Acquisition'
+  | 'Lead Reactivation'
+  | 'Other'
+
+export type CallDisposition =
+  | 'Not Called'
+  | 'Connected'
+  | 'Busy'
+  | 'Call Later'
+  | 'Interested'
+  | 'Not Interested'
+  | 'Wrong Number'
+  | 'Do Not Contact'
+  | 'Converted to Lead'
+
+export interface TelemarketingContact {
+  id: string
+  campaign_id: string
+  name: string
+  phone: string
+  party_id?: string | null
+  status: CallDisposition
+  last_attempt_at?: string | null
+  attempts_count: number
+  assigned_telecaller: string
+  notes?: string | null
+  next_attempt_at?: string | null
+  converted_lead_id?: string | null
+  created_at: string
+}
+
+export interface TelemarketingCampaignRow {
+  id: string
+  name: string
+  linked_campaign_id?: string | null
+  linked_campaign_name?: string | null
+  target_audience: string // e.g. 'Buyer', 'Seller', 'Owner', 'Tenant', 'Landlord', 'Investor', 'Broker', 'Other'
+  category: string // e.g. 'Residential', 'Commercial', 'Industrial', 'Agricultural', 'Mixed'
+  geography: string
+  start_date: string
+  end_date: string
+  purpose: TelemarketingPurpose
+  assigned_telecallers: string[]
+  status: TelemarketingCampaignStatus
+  created_at: string
+}
+
 export interface DemandGapItem {
   id: string
   category: string
@@ -2690,5 +2745,333 @@ export function getDemandGaps(): DemandGapItem[] {
     },
   ]
 }
+
+// ── Telemarketing Campaigns & Target Contact Lists ─────────────────────────────
+
+export const MOCK_TELEMARKETING_CAMPAIGNS: TelemarketingCampaignRow[] = [
+  {
+    id: 'TMC-2026-001',
+    name: 'Super Corridor IT Corridor Buyer Outreach',
+    linked_campaign_id: 'CMP-2026-001',
+    linked_campaign_name: 'Super Corridor Tech Hub Promotion',
+    target_audience: 'Buyer',
+    category: 'Commercial',
+    geography: '09-Super_Corridor, Indore',
+    start_date: '2026-09-05',
+    end_date: '2026-10-15',
+    purpose: 'Buyer Acquisition',
+    assigned_telecallers: ['Neha Kapoor', 'Ravi Mehta'],
+    status: 'Active',
+    created_at: '2026-09-05T08:30:00Z',
+  },
+  {
+    id: 'TMC-2026-002',
+    name: 'Scheme 140 Luxury Penthouse HNI Calling',
+    linked_campaign_id: 'CMP-2026-002',
+    linked_campaign_name: 'Scheme 140 Luxury High-Rise Influx',
+    target_audience: 'Buyer',
+    category: 'Residential',
+    geography: '01-Schm140_Mayank, Indore',
+    start_date: '2026-09-12',
+    end_date: '2026-10-20',
+    purpose: 'Cold Calling',
+    assigned_telecallers: ['Neha Kapoor'],
+    status: 'Active',
+    created_at: '2026-09-12T09:00:00Z',
+  },
+  {
+    id: 'TMC-2026-003',
+    name: 'Vijay Nagar Commercial Landlord Cold Outreach',
+    linked_campaign_id: 'CMP-2026-004',
+    linked_campaign_name: 'Vijay Nagar Landlord Onboarding Q3',
+    target_audience: 'Landlord',
+    category: 'Commercial',
+    geography: '04-Vijay_Nagar, Indore',
+    start_date: '2026-08-15',
+    end_date: '2026-09-15',
+    purpose: 'Owner Acquisition',
+    assigned_telecallers: ['Ravi Mehta', 'Aman Desai'],
+    status: 'Completed',
+    created_at: '2026-08-15T09:30:00Z',
+  },
+]
+
+export const MOCK_TELEMARKETING_CONTACTS: TelemarketingContact[] = [
+  // TMC-2026-001 (Super Corridor)
+  {
+    id: 'tmc-c-001',
+    campaign_id: 'TMC-2026-001',
+    name: 'Rajesh Sharma',
+    phone: '+91 98260 11223',
+    party_id: null,
+    status: 'Converted to Lead',
+    attempts_count: 3,
+    last_attempt_at: '2026-09-18T11:00:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Extremely interested in 1,000 sq ft office plot near IT SEZ. Converted to pipeline lead.',
+    next_attempt_at: null,
+    converted_lead_id: 'L-1005',
+    created_at: '2026-09-05T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-002',
+    campaign_id: 'TMC-2026-001',
+    name: 'Vikram Singh',
+    phone: '+91 98765 43212',
+    party_id: 'p3',
+    status: 'Interested',
+    attempts_count: 2,
+    last_attempt_at: '2026-09-19T10:30:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Ready for site visit on Saturday. Requested commercial plot layout on WhatsApp.',
+    next_attempt_at: '2026-09-21T11:00:00Z',
+    converted_lead_id: null,
+    created_at: '2026-09-05T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-003',
+    campaign_id: 'TMC-2026-001',
+    name: 'Manoj Patidar',
+    phone: '+91 98930 44551',
+    party_id: null,
+    status: 'Call Later',
+    attempts_count: 2,
+    last_attempt_at: '2026-09-18T14:20:00Z',
+    assigned_telecaller: 'Ravi Mehta',
+    notes: 'In meeting, requested follow-up call tomorrow afternoon after 4 PM.',
+    next_attempt_at: '2026-09-20T16:00:00Z',
+    converted_lead_id: null,
+    created_at: '2026-09-05T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-004',
+    campaign_id: 'TMC-2026-001',
+    name: 'Rohit Agrawal',
+    phone: '+91 94250 88992',
+    party_id: null,
+    status: 'Connected',
+    attempts_count: 1,
+    last_attempt_at: '2026-09-17T15:10:00Z',
+    assigned_telecaller: 'Ravi Mehta',
+    notes: 'Discussed Super Corridor tech zone pricing. Comparing with AB Road Bypass.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-09-05T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-005',
+    campaign_id: 'TMC-2026-001',
+    name: 'Dinesh Chawla',
+    phone: '+91 98270 33441',
+    party_id: null,
+    status: 'Busy',
+    attempts_count: 2,
+    last_attempt_at: '2026-09-19T12:00:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Call disconnected after two rings; busy tone.',
+    next_attempt_at: '2026-09-20T11:30:00Z',
+    converted_lead_id: null,
+    created_at: '2026-09-05T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-006',
+    campaign_id: 'TMC-2026-001',
+    name: 'Suresh Malviya',
+    phone: '+91 97550 12398',
+    party_id: null,
+    status: 'Not Called',
+    attempts_count: 0,
+    last_attempt_at: null,
+    assigned_telecaller: 'Ravi Mehta',
+    notes: null,
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-09-05T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-007',
+    campaign_id: 'TMC-2026-001',
+    name: 'Deepak Broker',
+    phone: '+91 98765 43216',
+    party_id: 'p7',
+    status: 'Not Interested',
+    attempts_count: 1,
+    last_attempt_at: '2026-09-15T16:00:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Only deals in resale commercial properties, not direct plots.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-09-05T09:00:00Z',
+  },
+
+  // TMC-2026-002 (Scheme 140 Luxury)
+  {
+    id: 'tmc-c-008',
+    campaign_id: 'TMC-2026-002',
+    name: 'Amit Jain',
+    phone: '+91 98765 43213',
+    party_id: 'p4',
+    status: 'Interested',
+    attempts_count: 2,
+    last_attempt_at: '2026-09-18T10:00:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Enquired about 4BHK corner units and clubhouse delivery date.',
+    next_attempt_at: '2026-09-22T14:00:00Z',
+    converted_lead_id: null,
+    created_at: '2026-09-12T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-009',
+    campaign_id: 'TMC-2026-002',
+    name: 'Harshwardhan Rathore',
+    phone: '+91 98260 77881',
+    party_id: null,
+    status: 'Call Later',
+    attempts_count: 1,
+    last_attempt_at: '2026-09-17T11:45:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Traveling to Mumbai. Call back Monday morning at 10 AM.',
+    next_attempt_at: '2026-09-22T10:00:00Z',
+    converted_lead_id: null,
+    created_at: '2026-09-12T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-010',
+    campaign_id: 'TMC-2026-002',
+    name: 'Sanjay Kothari',
+    phone: '+91 94250 12890',
+    party_id: null,
+    status: 'Connected',
+    attempts_count: 1,
+    last_attempt_at: '2026-09-16T14:15:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Shared Scheme 140 luxury brochure PDF on email.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-09-12T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-011',
+    campaign_id: 'TMC-2026-002',
+    name: 'Dr. Meenal Saxena',
+    phone: '+91 98931 55662',
+    party_id: null,
+    status: 'Not Called',
+    attempts_count: 0,
+    last_attempt_at: null,
+    assigned_telecaller: 'Neha Kapoor',
+    notes: null,
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-09-12T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-012',
+    campaign_id: 'TMC-2026-002',
+    name: 'Vivek Oberoi',
+    phone: '+91 98270 99887',
+    party_id: null,
+    status: 'Wrong Number',
+    attempts_count: 1,
+    last_attempt_at: '2026-09-15T10:30:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Number belongs to someone else in Delhi.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-09-12T09:00:00Z',
+  },
+  {
+    id: 'tmc-c-013',
+    campaign_id: 'TMC-2026-002',
+    name: 'Rahul Verma',
+    phone: '+91 98765 43215',
+    party_id: 'p6',
+    status: 'Converted to Lead',
+    attempts_count: 2,
+    last_attempt_at: '2026-09-16T09:30:00Z',
+    assigned_telecaller: 'Neha Kapoor',
+    notes: 'Wants to view penthouse floor on Sunday. Converted to qualified pipeline lead.',
+    next_attempt_at: null,
+    converted_lead_id: 'L-1007',
+    created_at: '2026-09-12T09:00:00Z',
+  },
+
+  // TMC-2026-003 (Vijay Nagar Landlords)
+  {
+    id: 'tmc-c-014',
+    campaign_id: 'TMC-2026-003',
+    name: 'Sunita Gupta',
+    phone: '+91 98765 43211',
+    party_id: 'p2',
+    status: 'Converted to Lead',
+    attempts_count: 3,
+    last_attempt_at: '2026-08-20T16:00:00Z',
+    assigned_telecaller: 'Ravi Mehta',
+    notes: 'Agreed for rental listing mandate of Vijay Nagar commercial office.',
+    next_attempt_at: null,
+    converted_lead_id: 'L-1008',
+    created_at: '2026-08-15T10:00:00Z',
+  },
+  {
+    id: 'tmc-c-015',
+    campaign_id: 'TMC-2026-003',
+    name: 'Anand Deshmukh',
+    phone: '+91 98261 33445',
+    party_id: null,
+    status: 'Connected',
+    attempts_count: 2,
+    last_attempt_at: '2026-08-22T11:00:00Z',
+    assigned_telecaller: 'Ravi Mehta',
+    notes: 'Has 2,000 sq ft office space available from November. Scheduled callback.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-08-15T10:00:00Z',
+  },
+  {
+    id: 'tmc-c-016',
+    campaign_id: 'TMC-2026-003',
+    name: 'Pradeep Tiwari',
+    phone: '+91 98932 66778',
+    party_id: null,
+    status: 'Busy',
+    attempts_count: 2,
+    last_attempt_at: '2026-08-24T15:30:00Z',
+    assigned_telecaller: 'Aman Desai',
+    notes: 'Did not answer after multiple call attempts.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-08-15T10:00:00Z',
+  },
+  {
+    id: 'tmc-c-017',
+    campaign_id: 'TMC-2026-003',
+    name: 'Nitin Kasliwal',
+    phone: '+91 94253 11229',
+    party_id: null,
+    status: 'Not Interested',
+    attempts_count: 1,
+    last_attempt_at: '2026-08-18T12:00:00Z',
+    assigned_telecaller: 'Ravi Mehta',
+    notes: 'Already leased out to a nationalized bank.',
+    next_attempt_at: null,
+    converted_lead_id: null,
+    created_at: '2026-08-15T10:00:00Z',
+  },
+  {
+    id: 'tmc-c-018',
+    campaign_id: 'TMC-2026-003',
+    name: 'Ritu Chhabra',
+    phone: '+91 98274 55660',
+    party_id: null,
+    status: 'Call Later',
+    attempts_count: 1,
+    last_attempt_at: '2026-08-25T14:00:00Z',
+    assigned_telecaller: 'Aman Desai',
+    notes: 'Wants current Vijay Nagar rental yield trends sheet sent first.',
+    next_attempt_at: '2026-08-28T11:00:00Z',
+    converted_lead_id: null,
+    created_at: '2026-08-15T10:00:00Z',
+  },
+]
 
 

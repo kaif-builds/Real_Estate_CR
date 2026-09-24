@@ -12,7 +12,7 @@ import {
   UserCheck, TrendingUp, Receipt, DollarSign, Users2,
   Settings, Shield, AlertTriangle, FileBarChart,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft,
-  Mic, Megaphone, Share2,
+  Mic, Megaphone, Share2, PhoneCall,
 } from 'lucide-react'
 
 // ── Nav item definitions ──────────────────────────────────────────────────────
@@ -60,8 +60,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'MARKETING',
     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'],
     items: [
-      { label: 'Campaigns',    href: '/campaigns',    icon: Megaphone, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Lead Sources', href: '/lead-sources', icon: Share2,    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Campaigns',     href: '/campaigns',               icon: Megaphone, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Telemarketing', href: '/telemarketing-campaigns', icon: PhoneCall, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Lead Sources',  href: '/lead-sources',            icon: Share2,    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
     ],
   },
   {
