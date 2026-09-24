@@ -30,7 +30,7 @@ import {
   XCircle, Eye, ArrowRight, Layers, Tag, MapPin, IndianRupee,
   FileText, Check, ChevronRight, BarChart3, ShieldCheck,
   Trash2, Edit3, Image, Video, Sparkles, Filter, CheckSquare,
-  Square, AlertTriangle, ExternalLink, ArrowUpRight, GitFork, Briefcase
+  Square, AlertTriangle, ExternalLink, ArrowUpRight, GitFork, Briefcase, Handshake
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
@@ -45,9 +45,11 @@ import { formatPrice, formatDate, formatCategory } from '@/lib/formatters'
 import {
   MOCK_CAMPAIGNS, MOCK_LEADS, MOCK_USERS, MOCK_PROPERTIES,
   MOCK_CAMPAIGN_PROMOTIONS, getDemandGaps, getMarketingTraceableChains,
+  MOCK_REFERRAL_PARTNERS,
   type CampaignRow, type CampaignType, type CampaignStatus,
   type TargetAudienceType, type PropertyCategoryType, type TransactionType,
-  type LeadRow, type CampaignPropertyPromotion, type DemandGapItem, type PropertyRow
+  type LeadRow, type CampaignPropertyPromotion, type DemandGapItem, type PropertyRow,
+  type ReferralPartnerRow
 } from '@/lib/mockData'
 
 // ── Dropdown Constants ────────────────────────────────────────────────────────
@@ -222,7 +224,18 @@ function CampaignsContent() {
     }
     return null
   })
-  const [detailTab, setDetailTab] = useState<'overview' | 'properties' | 'leads'>(initialTab)
+  const [detailTab, setDetailTab] = useState<'overview' | 'properties' | 'leads' | 'partners'>(initialTab)
+
+  // Partner Associations State
+  const [campaignPartnersMap, setCampaignPartnersMap] = useState<Record<string, string[]>>(() => {
+    const map: Record<string, string[]> = {}
+    for (const c of MOCK_CAMPAIGNS) {
+      map[c.id] = c.participating_partner_ids ? [...c.participating_partner_ids] : []
+    }
+    return map
+  })
+  const [showPartnerPicker, setShowPartnerPicker] = useState(false)
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<string[]>([])
 
   // Property Picker State
   const [pickerSearch, setPickerSearch] = useState('')
@@ -1356,6 +1369,20 @@ function CampaignsContent() {
                     {getLinkedLeads(selectedCampaign.id).length}
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('partners')}
+                  className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                    detailTab === 'partners'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Handshake size={14} /> Participating Partners
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-700 font-bold">
+                    {(campaignPartnersMap[selectedCampaign.id] || []).length}
+                  </span>
+                </button>
               </div>
 
               {/* Tab 1: Overview */}
@@ -1855,6 +1882,127 @@ function CampaignsContent() {
                 )
               })()}
 
+              {/* Tab 4: Participating Partners */}
+              {detailTab === 'partners' && (() => {
+                const partnerIds = campaignPartnersMap[selectedCampaign.id] || []
+                const partners = MOCK_REFERRAL_PARTNERS.filter(p => partnerIds.includes(p.id))
+
+                const handleRemovePartner = (partnerId: string) => {
+                  setCampaignPartnersMap(prev => ({
+                    ...prev,
+                    [selectedCampaign.id]: (prev[selectedCampaign.id] || []).filter(id => id !== partnerId)
+                  }))
+                }
+
+                return (
+                  <div className="space-y-4 pt-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Handshake size={14} className="text-indigo-600" />
+                          Partner Campaign Alliances
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Referral partners, broker networks, and developers collaborating on joint marketing initiatives for this campaign.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedPartnerIds(partnerIds)
+                          setShowPartnerPicker(true)
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 shrink-0"
+                      >
+                        <Plus size={13} className="mr-1" />
+                        Associate Partners
+                      </Button>
+                    </div>
+
+                    {partners.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {partners.map(partner => {
+                          const partnerLeadsInCampaign = MOCK_LEADS.filter(
+                            l => l.campaign_id === selectedCampaign.id &&
+                            (l.referral_partner_id === partner.id || l.referral_code === partner.referral_code)
+                          )
+
+                          return (
+                            <div
+                              key={partner.id}
+                              className="border border-slate-200 rounded-xl p-4 bg-white shadow-2xs space-y-3"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-slate-900 text-sm">
+                                      {partner.name}
+                                    </span>
+                                    <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                                      {partner.referral_code}
+                                    </span>
+                                  </div>
+                                  <span className="inline-block mt-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                                    {partner.category}
+                                  </span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemovePartner(partner.id)}
+                                  className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 px-2"
+                                  title="Remove from campaign"
+                                >
+                                  <Trash2 size={12} className="mr-1" /> Remove
+                                </Button>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Contact</span>
+                                  <span className="font-medium text-slate-800">{partner.contact_person || '—'}</span>
+                                  <span className="text-[11px] text-slate-500 block truncate">{partner.phone}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Leads via Campaign</span>
+                                  <div className="flex items-baseline gap-1 mt-0.5">
+                                    <span className="font-bold text-indigo-700 text-sm">{partnerLeadsInCampaign.length}</span>
+                                    <span className="text-[10px] text-slate-400">leads</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center space-y-3 bg-slate-50/50">
+                        <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                          <Handshake size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-800">No Participating Partners Associated</h4>
+                          <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                            Link registered referral partners and broker alliances to coordinate joint marketing pushes and track partner-specific attribution.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPartnerIds(partnerIds)
+                            setShowPartnerPicker(true)
+                          }}
+                          className="text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                        >
+                          <Plus size={13} className="mr-1" /> Add Referral Partner
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* Close Button */}
               <div className="flex justify-end pt-3 border-t border-slate-200">
                 <Button
@@ -2217,6 +2365,94 @@ function CampaignsContent() {
             </form>
           </Dialog>
         )}
+
+        {/* ── Partner Picker Dialog ────────────────────────────────────────── */}
+        <Dialog
+          open={showPartnerPicker}
+          onClose={() => setShowPartnerPicker(false)}
+          title={`Participating Partners: ${selectedCampaign?.name || ''}`}
+          className="max-w-lg"
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-slate-500">
+              Select referral and channel partners participating in this marketing campaign.
+            </p>
+            <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto border border-slate-200 rounded-xl bg-white">
+              {MOCK_REFERRAL_PARTNERS.map((partner) => {
+                const isSelected = selectedPartnerIds.includes(partner.id)
+                return (
+                  <div
+                    key={partner.id}
+                    onClick={() => {
+                      setSelectedPartnerIds((prev) =>
+                        prev.includes(partner.id)
+                          ? prev.filter((id) => id !== partner.id)
+                          : [...prev, partner.id]
+                      )
+                    }}
+                    className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${
+                      isSelected ? 'bg-indigo-50/70' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="rounded border-slate-300 text-indigo-600 pointer-events-none"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-slate-900">{partner.name}</span>
+                          <span className="font-mono text-[10px] px-1 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                            {partner.referral_code}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500">
+                          {partner.category} • {partner.contact_person || partner.phone}
+                        </span>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        partner.status === 'Active'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {partner.status}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPartnerPicker(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (selectedCampaign) {
+                    setCampaignPartnersMap((prev) => ({
+                      ...prev,
+                      [selectedCampaign.id]: selectedPartnerIds,
+                    }))
+                  }
+                  setShowPartnerPicker(false)
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+              >
+                Save Associations ({selectedPartnerIds.length})
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       </div>
     </AppLayout>
   )

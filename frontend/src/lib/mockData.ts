@@ -67,6 +67,8 @@ export interface LeadRow {
   referral_code?: string | null
   ad_reference?: string | null
   enquiry_at?: string | null
+  referral_partner_id?: string | null
+  referral_partner_name?: string | null
 }
 
 export type CampaignType =
@@ -128,6 +130,7 @@ export interface CampaignRow {
   target_qualified_leads: number
   target_opportunities: number
   promoted_properties?: string[]
+  participating_partner_ids?: string[]
   created_at: string
   updated_at: string
 }
@@ -142,6 +145,32 @@ export interface CampaignPropertyPromotion {
   media_attachments: string[] // file-name references (e.g. photos, videos, brochure)
   enquiries_count: number
   added_at: string
+}
+
+// ── Referral & Partner Management Types ────────────────────────────────────────
+
+export type PartnerCategory =
+  | 'Property Consultant'
+  | 'Broker'
+  | 'Developer'
+  | 'Investor'
+  | 'Corporate Contact'
+  | 'Referral Partner'
+  | 'Other'
+
+export type PartnerStatus = 'Active' | 'Inactive'
+
+export interface ReferralPartnerRow {
+  id: string
+  name: string
+  category: PartnerCategory
+  contact_person?: string
+  phone: string
+  email: string
+  referral_code: string
+  status: PartnerStatus
+  notes?: string
+  created_at: string
 }
 
 // ── Telemarketing Campaign Types ───────────────────────────────────────────────
@@ -315,6 +344,7 @@ export const DEFAULT_LEAD_SOURCES: LeadSourceItem[] = [
   { id: 'src-off-10', name: 'Referral Drive',    channel_type: 'Offline', is_active: true,  description: 'Structured existing client & alumni word-of-mouth referral programs.', created_at: '2026-01-01T00:00:00Z' },
   { id: 'src-off-11', name: 'Direct Marketing',  channel_type: 'Offline', is_active: true,  description: 'Targeted outbound telecalling, corporate park visits, and direct mailers.', created_at: '2026-01-01T00:00:00Z' },
   { id: 'src-off-12', name: 'Other',             channel_type: 'Offline', is_active: true,  description: 'Miscellaneous offline acquisition channels and unclassified walk-ins.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'src-off-13', name: 'Referral Partner',  channel_type: 'Offline', is_active: true,  description: 'Leads referred by registered marketing, broker, and corporate partners.', created_at: '2026-01-01T00:00:00Z' },
 ]
 
 // ── Leads ─────────────────────────────────────────────────────────────────────
@@ -324,23 +354,25 @@ export const MOCK_LEADS: LeadRow[] = [
     id: 'L-1001',
     party_id: 'p4',
     party_name: 'Amit Jain',
-    channel_type: 'Digital',
-    source: 'Website',
+    channel_type: 'Offline',
+    source: 'Referral Partner',
     lead_type: 'BUYER',
     status: 'CONTACTED',
     priority: 'HIGH',
     assigned_to_id: 'u2',
     assigned_to_name: 'Neha Kapoor',
     value: 7500000,
-    remarks: 'Interested in 2BHK Scheme 140',
+    remarks: 'Referred by Shree Balaji Consultancy for 2BHK Scheme 140',
     last_activity_at: '2026-09-18T10:00:00Z',
     next_follow_up_at: '2026-09-19T12:00:00Z',
     created_at: '2026-09-10T09:00:00Z',
     campaign_id: 'CMP-2026-002',
     campaign_name: 'Scheme 140 Luxury High-Rise Influx',
-    referral_code: 'WEB-SCH140-DIR',
-    ad_reference: 'https://propdesk.in/campaigns/scheme140',
+    referral_code: 'REF-BALAJI',
+    ad_reference: 'Partner Direct Referral',
     enquiry_at: '2026-09-10T08:58:00Z',
+    referral_partner_id: 'RP-101',
+    referral_partner_name: 'Shree Balaji Realty Advisors',
   },
   {
     id: 'L-1002',
@@ -412,45 +444,49 @@ export const MOCK_LEADS: LeadRow[] = [
     id: 'L-1005',
     party_id: 'p3',
     party_name: 'Vikram Singh',
-    channel_type: 'Digital',
-    source: 'Social Media',
+    channel_type: 'Offline',
+    source: 'Referral Partner',
     lead_type: 'BUYER',
     status: 'NEW',
     priority: 'HIGH',
     assigned_to_id: 'u2',
     assigned_to_name: 'Neha Kapoor',
     value: 8500000,
-    remarks: 'Inquired from Super Corridor Meta Instagram carousel ad',
+    remarks: 'Referred by Apex Prime Infra network for Super Corridor plots',
     last_activity_at: '2026-09-19T11:00:00Z',
     next_follow_up_at: '2026-09-21T10:00:00Z',
     created_at: '2026-09-19T11:00:00Z',
     campaign_id: 'CMP-2026-001',
     campaign_name: 'Super Corridor Tech Hub Promotion',
-    referral_code: 'META-INSTA-SC26',
-    ad_reference: 'Instagram Carousel Ad #4 (Tech Hub Luxury Plots)',
+    referral_code: 'REF-APEX',
+    ad_reference: 'Partner Network Drive',
     enquiry_at: '2026-09-19T10:55:00Z',
+    referral_partner_id: 'RP-102',
+    referral_partner_name: 'Apex Prime Infra Network',
   },
   {
     id: 'L-1006',
     party_id: 'p4',
     party_name: 'Amit Jain',
-    channel_type: 'Digital',
-    source: 'Search/Display Ad',
+    channel_type: 'Offline',
+    source: 'Referral Partner',
     lead_type: 'INVESTOR',
     status: 'CONTACTED',
     priority: 'MEDIUM',
     assigned_to_id: 'u3',
     assigned_to_name: 'Ravi Mehta',
     value: 6500000,
-    remarks: 'Looking for commercial plot near IT SEZ from Google search click',
+    remarks: 'Corporate HNI channel referral for commercial plot',
     last_activity_at: '2026-09-17T15:30:00Z',
     next_follow_up_at: '2026-09-20T16:00:00Z',
     created_at: '2026-09-15T14:00:00Z',
     campaign_id: 'CMP-2026-001',
     campaign_name: 'Super Corridor Tech Hub Promotion',
-    referral_code: 'GGL-SRCH-SEZ',
-    ad_reference: 'Google Search Keyword: "Commercial plots Super Corridor Indore"',
+    referral_code: 'REF-HNI',
+    ad_reference: 'Indore HNI Club Bulletin',
     enquiry_at: '2026-09-15T13:50:00Z',
+    referral_partner_id: 'RP-103',
+    referral_partner_name: 'Indore HNI Wealth Advisory',
   },
   {
     id: 'L-1007',
@@ -2532,6 +2568,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     target_qualified_leads: 20,
     target_opportunities: 8,
     promoted_properties: ['P-1003', 'P-1008', 'P-1009'],
+    participating_partner_ids: ['RP-102'],
     created_at: '2026-08-25T10:00:00Z',
     updated_at: '2026-09-18T14:30:00Z',
   },
@@ -2554,6 +2591,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     target_qualified_leads: 35,
     target_opportunities: 15,
     promoted_properties: ['P-1003'],
+    participating_partner_ids: ['RP-101', 'RP-103'],
     created_at: '2026-09-02T11:15:00Z',
     updated_at: '2026-09-20T09:10:00Z',
   },
@@ -2576,6 +2614,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     target_qualified_leads: 12,
     target_opportunities: 5,
     promoted_properties: ['P-1005'],
+    participating_partner_ids: ['RP-101'],
     created_at: '2026-08-10T08:45:00Z',
     updated_at: '2026-09-15T16:20:00Z',
   },
@@ -2598,6 +2637,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     target_qualified_leads: 18,
     target_opportunities: 10,
     promoted_properties: ['P-1001', 'P-1002'],
+    participating_partner_ids: ['RP-104'],
     created_at: '2026-06-25T12:00:00Z',
     updated_at: '2026-08-31T18:00:00Z',
   },
@@ -3219,5 +3259,113 @@ export function getMarketingTraceableChains(): TraceableChainRow[] {
 
   return chains
 }
+
+// ── Referral Partners Dataset ──────────────────────────────────────────────────
+
+export const MOCK_REFERRAL_PARTNERS: ReferralPartnerRow[] = [
+  {
+    id: 'RP-101',
+    name: 'Shree Balaji Realty Advisors',
+    category: 'Broker',
+    contact_person: 'Rajesh Sharma',
+    phone: '+91 98260 11223',
+    email: 'rajesh@balajirealty.com',
+    referral_code: 'REF-BALAJI',
+    status: 'Active',
+    notes: 'Premier independent broker agency covering Scheme 140 and Vijay Nagar.',
+    created_at: '2026-01-10T10:00:00Z',
+  },
+  {
+    id: 'RP-102',
+    name: 'Apex Prime Infra Network',
+    category: 'Developer',
+    contact_person: 'Anand Verma',
+    phone: '+91 98261 44556',
+    email: 'anand@apexprimeinfra.in',
+    referral_code: 'REF-APEX',
+    status: 'Active',
+    notes: 'Developer channel alliance specializing in Super Corridor commercial and plotted developments.',
+    created_at: '2026-02-01T11:00:00Z',
+  },
+  {
+    id: 'RP-103',
+    name: 'Indore HNI Wealth Advisory',
+    category: 'Corporate Contact',
+    contact_person: 'Sunil Mehta',
+    phone: '+91 98262 77889',
+    email: 'sunil@indorehni.org',
+    referral_code: 'REF-HNI',
+    status: 'Active',
+    notes: 'Private wealth advisory syndicate directing high-ticket buyers to luxury projects.',
+    created_at: '2026-02-15T14:30:00Z',
+  },
+  {
+    id: 'RP-104',
+    name: 'Malwa Capital Investors Group',
+    category: 'Investor',
+    contact_person: 'Pooja Malhotra',
+    phone: '+91 98263 99001',
+    email: 'pooja@malwacapital.com',
+    referral_code: 'REF-MALWA',
+    status: 'Inactive',
+    notes: 'Commercial real estate angel syndicate for fractional retail purchases.',
+    created_at: '2026-03-01T09:00:00Z',
+  },
+]
+
+export interface PartnerPerformanceStats {
+  partner: ReferralPartnerRow
+  leads: LeadRow[]
+  opportunities: PipelineOpportunityRow[]
+  deals: TransactionRow[]
+  leadsCount: number
+  opportunitiesCount: number
+  dealsCount: number
+  totalDealValue: number
+  totalCommission: number
+}
+
+export function getPartnerPerformance(partnerId: string): PartnerPerformanceStats | null {
+  const partner = MOCK_REFERRAL_PARTNERS.find((p) => p.id === partnerId)
+  if (!partner) return null
+
+  // 1. Leads attributed to this partner by partner ID or referral code
+  const leads = MOCK_LEADS.filter(
+    (l) => l.referral_partner_id === partner.id || l.referral_code === partner.referral_code
+  )
+  const leadIds = new Set(leads.map((l) => l.id))
+  const partyIds = new Set(leads.map((l) => l.party_id))
+
+  // 2. Opportunities traced from these leads
+  const opportunities = MOCK_PIPELINE_OPPORTUNITIES.filter(
+    (o) => (o.originating_lead_id && leadIds.has(o.originating_lead_id)) || partyIds.has(o.client_id)
+  )
+  const oppIds = new Set(opportunities.map((o) => o.id))
+
+  // 3. Transactions / Deals traced from these opportunities or leads
+  const deals = MOCK_TRANSACTIONS.filter(
+    (t) => oppIds.has(t.opportunity_id) || (t.originating_lead_id && leadIds.has(t.originating_lead_id))
+  )
+
+  const totalDealValue = deals.reduce((sum, d) => sum + (d.transaction_value || 0), 0)
+  const totalCommission = deals.reduce((sum, d) => sum + (d.commission_amount || 0), 0)
+
+  return {
+    partner,
+    leads,
+    opportunities,
+    deals,
+    leadsCount: leads.length,
+    opportunitiesCount: opportunities.length,
+    dealsCount: deals.length,
+    totalDealValue,
+    totalCommission,
+  }
+}
+
+export function getAllPartnersPerformance(): PartnerPerformanceStats[] {
+  return MOCK_REFERRAL_PARTNERS.map((p) => getPartnerPerformance(p.id)!)
+}
+
 
 

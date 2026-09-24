@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Plus, Globe, Building2, Megaphone, Tag, Calendar, ExternalLink } from 'lucide-react'
+import { Plus, Globe, Building2, Megaphone, Tag, Calendar, ExternalLink, Handshake } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ import {
   MOCK_USERS,
   MOCK_CAMPAIGNS,
   DEFAULT_LEAD_SOURCES,
+  MOCK_REFERRAL_PARTNERS,
   type LeadRow,
   type ChannelType,
 } from '@/lib/mockData'
@@ -71,6 +72,8 @@ function LeadsContent() {
   const [newChannelType, setNewChannelType] = useState<ChannelType>('Digital')
   const [newSource, setNewSource] = useState<string>('Website')
   const [newCampaignId, setNewCampaignId] = useState<string>('')
+  const [newPartnerId, setNewPartnerId] = useState<string>('')
+  const [newReferralCode, setNewReferralCode] = useState<string>('')
 
   // Handle Channel Type toggle in "+ New Lead" modal
   const handleChannelTypeChange = (type: ChannelType) => {
@@ -79,6 +82,8 @@ function LeadsContent() {
       s => s.channel_type === type && s.is_active
     )
     setNewSource(firstMatchingSource ? firstMatchingSource.name : (type === 'Digital' ? 'Website' : 'Newspaper'))
+    setNewPartnerId('')
+    setNewReferralCode('')
   }
 
   // Filter sources available in the filter bar based on selected Channel Type
@@ -118,6 +123,7 @@ function LeadsContent() {
     const campaignId = newCampaignId || null
     const campaign = campaignId ? MOCK_CAMPAIGNS.find(c => c.id === campaignId) : null
     const enquiryAtInput = fd.get('enquiry_at') as string
+    const partner = newPartnerId ? MOCK_REFERRAL_PARTNERS.find(p => p.id === newPartnerId) : null
 
     const newLead: LeadRow = {
       id: `L-${Date.now().toString(36).toUpperCase().slice(-8)}`,
@@ -134,7 +140,9 @@ function LeadsContent() {
       remarks: (fd.get('remarks') as string) || null,
       campaign_id: campaignId,
       campaign_name: campaign?.name ?? null,
-      referral_code: (fd.get('referral_code') as string) || null,
+      referral_partner_id: partner ? partner.id : null,
+      referral_partner_name: partner ? partner.name : null,
+      referral_code: newReferralCode || (fd.get('referral_code') as string) || (partner?.referral_code ?? null),
       ad_reference: newChannelType === 'Digital' ? ((fd.get('ad_reference') as string) || null) : null,
       enquiry_at: enquiryAtInput ? new Date(enquiryAtInput).toISOString() : new Date().toISOString(),
       last_activity_at: new Date().toISOString(),
@@ -144,6 +152,8 @@ function LeadsContent() {
 
     setLeads(prev => [newLead, ...prev])
     setShowCreate(false)
+    setNewPartnerId('')
+    setNewReferralCode('')
     // Reset form state defaults
     setNewChannelType('Digital')
     setNewSource('Website')
@@ -198,6 +208,19 @@ function LeadsContent() {
             )}
             <span className="font-semibold text-slate-800 text-xs">{r.source || '—'}</span>
           </div>
+
+          {/* Partner Referral Badge */}
+          {r.referral_partner_name && (
+            <div className="flex items-center gap-1">
+              <span
+                className="inline-flex items-center gap-1 text-[10px] text-indigo-800 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-medium truncate max-w-[190px]"
+                title={`Referred by Partner: ${r.referral_partner_name}`}
+              >
+                <Handshake size={10} className="shrink-0 text-indigo-600" />
+                <span className="truncate">{r.referral_partner_name}</span>
+              </span>
+            </div>
+          )}
 
           {/* Linked Campaign Badge */}
           {r.campaign_name && (
@@ -461,7 +484,14 @@ function LeadsContent() {
                   name="source"
                   id="source"
                   value={newSource}
-                  onChange={e => setNewSource(e.target.value)}
+                  onChange={e => {
+                    const src = e.target.value
+                    setNewSource(src)
+                    if (src !== 'Referral Partner') {
+                      setNewPartnerId('')
+                      setNewReferralCode('')
+                    }
+                  }}
                   required
                   className="mt-1"
                 >
@@ -474,6 +504,42 @@ function LeadsContent() {
                     ))}
                 </Select>
               </div>
+
+              {/* Conditional Partner Picker when Source is Referral Partner */}
+              {newSource === 'Referral Partner' && (
+                <div className="bg-indigo-50/60 p-3 rounded-lg border border-indigo-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="referral_partner" className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                      <Handshake size={14} className="text-indigo-600" />
+                      Referred by Partner *
+                    </Label>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full">
+                      Partner Attribution
+                    </span>
+                  </div>
+                  <Select
+                    id="referral_partner"
+                    value={newPartnerId}
+                    onChange={(e) => {
+                      const pId = e.target.value
+                      setNewPartnerId(pId)
+                      const partner = MOCK_REFERRAL_PARTNERS.find(p => p.id === pId)
+                      if (partner) {
+                        setNewReferralCode(partner.referral_code)
+                      }
+                    }}
+                    required
+                    className="mt-1 bg-white text-xs"
+                  >
+                    <option value="">-- Choose Referral Partner --</option>
+                    {MOCK_REFERRAL_PARTNERS.filter(p => p.status === 'Active').map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.category} • {p.referral_code})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
 
               {/* Optional Linked Campaign */}
               <div>
@@ -505,7 +571,9 @@ function LeadsContent() {
                   <Input
                     name="referral_code"
                     id="referral_code"
-                    placeholder="e.g. META-INSTA-01, HOARD-02"
+                    placeholder="e.g. META-INSTA-01, REF-BALAJI"
+                    value={newReferralCode}
+                    onChange={e => setNewReferralCode(e.target.value)}
                     className="mt-1 font-mono text-xs"
                   />
                 </div>
