@@ -126,6 +126,7 @@ export interface CampaignRow {
   categories: PropertyCategoryType[]
   transaction_types: TransactionType[]
   planned_budget: number
+  actual_spend?: number
   target_leads: number
   target_qualified_leads: number
   target_opportunities: number
@@ -2564,6 +2565,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     categories: ['Commercial', 'Residential'],
     transaction_types: ['Sale', 'Purchase'],
     planned_budget: 75000,
+    actual_spend: 68000,
     target_leads: 50,
     target_qualified_leads: 20,
     target_opportunities: 8,
@@ -2587,6 +2589,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     categories: ['Residential'],
     transaction_types: ['Sale'],
     planned_budget: 120000,
+    actual_spend: 94000,
     target_leads: 80,
     target_qualified_leads: 35,
     target_opportunities: 15,
@@ -2610,6 +2613,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     categories: ['Commercial'],
     transaction_types: ['Rent', 'Lease'],
     planned_budget: 45000,
+    actual_spend: 38000,
     target_leads: 30,
     target_qualified_leads: 12,
     target_opportunities: 5,
@@ -2633,6 +2637,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     categories: ['Residential', 'Commercial'],
     transaction_types: ['Rent', 'Lease'],
     planned_budget: 35000,
+    actual_spend: 32000,
     target_leads: 25,
     target_qualified_leads: 18,
     target_opportunities: 10,
@@ -3366,6 +3371,546 @@ export function getPartnerPerformance(partnerId: string): PartnerPerformanceStat
 export function getAllPartnersPerformance(): PartnerPerformanceStats[] {
   return MOCK_REFERRAL_PARTNERS.map((p) => getPartnerPerformance(p.id)!)
 }
+
+// ── Campaign Analytics & Marketing Dashboard Aggregation Helpers ───────────────
+
+export interface CampaignPerformanceMetric {
+  campaign: CampaignRow
+  totalLeads: number
+  qualifiedLeads: number
+  opportunities: number
+  closedDeals: number
+  conversionRate: number
+  plannedBudget: number
+  actualSpend: number | null
+  cpl: number | null
+  cpql: number | null
+  totalRevenue: number
+  totalCommission: number
+  roi: number | null
+}
+
+export interface SourceChannelMetric {
+  source: string
+  channel_type: ChannelType | 'Other'
+  leadsGenerated: number
+  qualifiedLeads: number
+  opportunities: number
+  closedDeals: number
+  conversionRate: number
+  totalDealValue: number
+}
+
+export interface PromotedPropertyMetric {
+  propertyId: string
+  shortLoc: string
+  category: string
+  price: number
+  promotedCampaigns: { id: string; name: string }[]
+  enquiriesCount: number
+  opportunitiesCount: number
+  closedDealsCount: number
+  totalDealValue: number
+}
+
+export interface CategoryMetric {
+  category: string
+  leadsCount: number
+  opportunitiesCount: number
+  closedDealsCount: number
+  totalValue: number
+}
+
+export interface LocationMetric {
+  shortLoc: string
+  leadsCount: number
+  opportunitiesCount: number
+  closedDealsCount: number
+  conversionRate: number
+}
+
+export interface TelemarketingPerformanceMetric {
+  campaignId: string
+  campaignName: string
+  linkedCampaignId?: string | null
+  linkedCampaignName?: string | null
+  totalContacts: number
+  attemptsMade: number
+  connected: number
+  interested: number
+  convertedToLead: number
+  conversionRate: number
+}
+
+export interface MarketingDashboardData {
+  campaignSummary: {
+    activeCount: number
+    plannedCount: number
+    pausedCount: number
+    completedCount: number
+    draftCount: number
+    cancelledCount: number
+    totalCount: number
+  }
+  leadsSummary: {
+    today: number
+    thisWeek: number
+    thisMonth: number
+  }
+  qualifiedLeadsThisMonth: number
+  opportunitiesThisMonth: number
+  closedDealsThisMonth: number
+  totalMarketingPipelineValue: number
+  leadsBySource: {
+    source: string
+    channel_type: ChannelType | 'Other'
+    count: number
+    percentage: number
+  }[]
+  campaignStatusList: {
+    status: CampaignStatus
+    count: number
+  }[]
+  topPerformingCampaigns: {
+    campaign: CampaignRow
+    leadsCount: number
+    closedDealsCount: number
+    conversionRate: number
+  }[]
+  spendAndCpl: {
+    hasBudgetData: boolean
+    totalSpend: number
+    blendedCPL: number | null
+    blendedCPQL: number | null
+  }
+  topReferralPartners: PartnerPerformanceStats[]
+}
+
+export function getCampaignPerformanceMetrics(): CampaignPerformanceMetric[] {
+  const chains = getMarketingTraceableChains()
+
+  return MOCK_CAMPAIGNS.map((campaign) => {
+    // Leads attributed to this campaign
+    const campaignLeads = MOCK_LEADS.filter((l) => l.campaign_id === campaign.id)
+    const leadIds = new Set(campaignLeads.map((l) => l.id))
+    const partyIds = new Set(campaignLeads.map((l) => l.party_id))
+
+    // Qualified leads (either status QUALIFIED or advanced to Opportunity/Deal)
+    const qualifiedLeads = campaignLeads.filter((l) => {
+      if (l.status === 'QUALIFIED' || l.status === 'WON' || l.status === 'CLOSED') return true
+      return MOCK_PIPELINE_OPPORTUNITIES.some(
+        (o) => o.originating_lead_id === l.id || o.client_id === l.party_id
+      )
+    }).length
+
+    // Opportunities
+    const opps = MOCK_PIPELINE_OPPORTUNITIES.filter(
+      (o) =>
+        o.attributed_campaign_id === campaign.id ||
+        (o.originating_lead_id && leadIds.has(o.originating_lead_id)) ||
+        partyIds.has(o.client_id)
+    )
+    const oppIds = new Set(opps.map((o) => o.id))
+
+    // Transactions / Deals
+    const txns = MOCK_TRANSACTIONS.filter(
+      (t) =>
+        t.attributed_campaign_id === campaign.id ||
+        oppIds.has(t.opportunity_id) ||
+        (t.originating_lead_id && leadIds.has(t.originating_lead_id))
+    )
+
+    // Also count opps that reached 'WON'
+    const wonOppIds = new Set(opps.filter((o) => o.stage === 'WON').map((o) => o.id))
+    const closedCount = Math.max(txns.length, wonOppIds.size)
+
+    const totalRevenue = txns.reduce((sum, t) => sum + (t.transaction_value || 0), 0) ||
+      opps.filter((o) => o.stage === 'WON').reduce((sum, o) => sum + (o.expected_value || 0), 0)
+
+    const totalCommission = txns.reduce((sum, t) => sum + (t.commission_amount || 0), 0) ||
+      Math.round(totalRevenue * 0.02)
+
+    const totalLeads = campaignLeads.length
+    const conversionRate = totalLeads > 0 ? Math.round((closedCount / totalLeads) * 1000) / 10 : 0
+    const actualSpend = typeof campaign.actual_spend === 'number' ? campaign.actual_spend : null
+    const cpl = actualSpend && totalLeads > 0 ? Math.round(actualSpend / totalLeads) : null
+    const cpql = actualSpend && qualifiedLeads > 0 ? Math.round(actualSpend / qualifiedLeads) : null
+
+    // ROI = ((Commission - Actual Spend) / Actual Spend) * 100
+    let roi: number | null = null
+    if (actualSpend !== null && actualSpend > 0) {
+      roi = Math.round(((totalCommission - actualSpend) / actualSpend) * 1000) / 10
+    }
+
+    return {
+      campaign,
+      totalLeads,
+      qualifiedLeads,
+      opportunities: opps.length,
+      closedDeals: closedCount,
+      conversionRate,
+      plannedBudget: campaign.planned_budget,
+      actualSpend,
+      cpl,
+      cpql,
+      totalRevenue,
+      totalCommission,
+      roi,
+    }
+  })
+}
+
+export function getSourceChannelMetrics(): SourceChannelMetric[] {
+  // Aggregate all unique sources from MOCK_LEADS
+  const map = new Map<string, {
+    channel_type: ChannelType | 'Other'
+    leads: LeadRow[]
+  }>()
+
+  for (const lead of MOCK_LEADS) {
+    const src = lead.source || 'Direct Outreach'
+    const channel = lead.channel_type || (src.includes('Website') || src.includes('Social') ? 'Digital' : 'Offline')
+    if (!map.has(src)) {
+      map.set(src, { channel_type: channel, leads: [] })
+    }
+    map.get(src)!.leads.push(lead)
+  }
+
+  const results: SourceChannelMetric[] = []
+  for (const [source, data] of Array.from(map.entries())) {
+    const leads = data.leads
+    const leadIds = new Set(leads.map((l) => l.id))
+    const partyIds = new Set(leads.map((l) => l.party_id))
+
+    const qualifiedLeads = leads.filter((l) => {
+      if (l.status === 'QUALIFIED' || l.status === 'WON' || l.status === 'CLOSED') return true
+      return MOCK_PIPELINE_OPPORTUNITIES.some(
+        (o) => o.originating_lead_id === l.id || o.client_id === l.party_id
+      )
+    }).length
+
+    const opps = MOCK_PIPELINE_OPPORTUNITIES.filter(
+      (o) =>
+        (o.originating_lead_id && leadIds.has(o.originating_lead_id)) ||
+        partyIds.has(o.client_id) ||
+        (o.first_touch_source && o.first_touch_source.includes(source))
+    )
+    const oppIds = new Set(opps.map((o) => o.id))
+
+    const txns = MOCK_TRANSACTIONS.filter(
+      (t) =>
+        oppIds.has(t.opportunity_id) ||
+        (t.originating_lead_id && leadIds.has(t.originating_lead_id))
+    )
+    const closedCount = Math.max(txns.length, opps.filter((o) => o.stage === 'WON').length)
+    const totalDealValue = txns.reduce((sum, t) => sum + (t.transaction_value || 0), 0)
+
+    const conversionRate = leads.length > 0 ? Math.round((closedCount / leads.length) * 1000) / 10 : 0
+
+    results.push({
+      source,
+      channel_type: data.channel_type,
+      leadsGenerated: leads.length,
+      qualifiedLeads,
+      opportunities: opps.length,
+      closedDeals: closedCount,
+      conversionRate,
+      totalDealValue,
+    })
+  }
+
+  return results.sort((a, b) => b.leadsGenerated - a.leadsGenerated)
+}
+
+export function getPromotedPropertyMetrics(): PromotedPropertyMetric[] {
+  // Unique property IDs promoted
+  const uniquePropIds = Array.from(new Set(MOCK_CAMPAIGN_PROMOTIONS.map((p) => p.property_id)))
+
+  return uniquePropIds.map((propId) => {
+    const prop = MOCK_PROPERTIES.find((p) => p.id === propId)
+    const promotions = MOCK_CAMPAIGN_PROMOTIONS.filter((p) => p.property_id === propId)
+    const campaignIds = new Set(promotions.map((p) => p.campaign_id))
+    const promotedCampaigns = MOCK_CAMPAIGNS.filter((c) => campaignIds.has(c.id)).map((c) => ({
+      id: c.id,
+      name: c.name,
+    }))
+
+    const totalEnquiries = promotions.reduce((sum, p) => sum + (p.enquiries_count || 0), 0)
+
+    // Downstream opportunities for this property
+    const opps = MOCK_PIPELINE_OPPORTUNITIES.filter((o) => o.property_id === propId)
+    const oppIds = new Set(opps.map((o) => o.id))
+
+    // Closed transactions for this property
+    const txns = MOCK_TRANSACTIONS.filter(
+      (t) => t.property_id === propId || oppIds.has(t.opportunity_id)
+    )
+    const closedCount = Math.max(txns.length, opps.filter((o) => o.stage === 'WON').length)
+    const totalDealValue = txns.reduce((sum, t) => sum + (t.transaction_value || 0), 0) ||
+      (closedCount > 0 ? (prop?.price || 0) : 0)
+
+    return {
+      propertyId: propId,
+      shortLoc: prop?.short_loc || 'Indore Prime',
+      category: prop?.category || 'Residential',
+      price: prop?.price || 0,
+      promotedCampaigns,
+      enquiriesCount: totalEnquiries,
+      opportunitiesCount: opps.length,
+      closedDealsCount: closedCount,
+      totalDealValue,
+    }
+  })
+}
+
+export function getLocationAndCategoryMetrics(): {
+  categories: CategoryMetric[]
+  locations: LocationMetric[]
+} {
+  const categoryMap = new Map<string, { leads: number; opps: number; closed: number; value: number }>()
+  const locationMap = new Map<string, { leads: number; opps: number; closed: number }>()
+
+  // Trace every lead
+  for (const lead of MOCK_LEADS) {
+    const opp = MOCK_PIPELINE_OPPORTUNITIES.find(
+      (o) => o.originating_lead_id === lead.id || o.client_id === lead.party_id
+    )
+    const prop = opp?.property_id ? MOCK_PROPERTIES.find((p) => p.id === opp.property_id) : null
+    const campaign = lead.campaign_id ? MOCK_CAMPAIGNS.find((c) => c.id === lead.campaign_id) : null
+
+    // Determine category
+    let cat = 'Residential'
+    if (prop) {
+      cat = prop.category.includes('COMMERCIAL') ? 'Commercial' : prop.category.includes('PLOT') ? 'Plot' : 'Residential'
+    } else if (campaign && campaign.categories.length > 0) {
+      cat = campaign.categories[0]
+    }
+
+    // Determine location
+    let loc = '01-Schm140_Mayank'
+    if (prop) {
+      loc = prop.short_loc
+    } else if (campaign && campaign.geography) {
+      loc = campaign.geography.split(',')[0].trim()
+    }
+
+    // Category tally
+    if (!categoryMap.has(cat)) {
+      categoryMap.set(cat, { leads: 0, opps: 0, closed: 0, value: 0 })
+    }
+    const catEntry = categoryMap.get(cat)!
+    catEntry.leads += 1
+    if (opp) {
+      catEntry.opps += 1
+      catEntry.value += opp.expected_value || 0
+      if (opp.stage === 'WON') catEntry.closed += 1
+    }
+
+    // Location tally
+    if (!locationMap.has(loc)) {
+      locationMap.set(loc, { leads: 0, opps: 0, closed: 0 })
+    }
+    const locEntry = locationMap.get(loc)!
+    locEntry.leads += 1
+    if (opp) {
+      locEntry.opps += 1
+      if (opp.stage === 'WON') locEntry.closed += 1
+    }
+  }
+
+  const categories: CategoryMetric[] = Array.from(categoryMap.entries()).map(([category, val]) => ({
+    category,
+    leadsCount: val.leads,
+    opportunitiesCount: val.opps,
+    closedDealsCount: val.closed,
+    totalValue: val.value,
+  }))
+
+  const locations: LocationMetric[] = Array.from(locationMap.entries()).map(([shortLoc, val]) => ({
+    shortLoc,
+    leadsCount: val.leads,
+    opportunitiesCount: val.opps,
+    closedDealsCount: val.closed,
+    conversionRate: val.leads > 0 ? Math.round((val.closed / val.leads) * 1000) / 10 : 0,
+  })).sort((a, b) => b.leadsCount - a.leadsCount)
+
+  return { categories, locations }
+}
+
+export function getTelemarketingMetrics(): TelemarketingPerformanceMetric[] {
+  return MOCK_TELEMARKETING_CAMPAIGNS.map((tmc) => {
+    const contacts = MOCK_TELEMARKETING_CONTACTS.filter((c) => c.campaign_id === tmc.id)
+    const attemptsMade = contacts.reduce((sum, c) => sum + (c.attempts_count || 0), 0)
+    const connected = contacts.filter(
+      (c) =>
+        c.attempts_count > 0 &&
+        c.status !== 'Not Called' &&
+        c.status !== 'Busy' &&
+        c.status !== 'Wrong Number'
+    ).length
+    const interested = contacts.filter(
+      (c) => c.status === 'Interested' || c.status === 'Converted to Lead'
+    ).length
+    const convertedToLead = contacts.filter((c) => c.status === 'Converted to Lead').length
+    const conversionRate =
+      contacts.length > 0 ? Math.round((convertedToLead / contacts.length) * 1000) / 10 : 0
+
+    return {
+      campaignId: tmc.id,
+      campaignName: tmc.name,
+      linkedCampaignId: tmc.linked_campaign_id,
+      linkedCampaignName: tmc.linked_campaign_name,
+      totalContacts: contacts.length,
+      attemptsMade,
+      connected,
+      interested,
+      convertedToLead,
+      conversionRate,
+    }
+  })
+}
+
+export function getMarketingDashboardMetrics(): MarketingDashboardData {
+  // 1. Campaign summary counts
+  const activeCount = MOCK_CAMPAIGNS.filter((c) => c.status === 'Active').length
+  const plannedCount = MOCK_CAMPAIGNS.filter((c) => c.status === 'Planned').length
+  const pausedCount = MOCK_CAMPAIGNS.filter((c) => c.status === 'Paused').length
+  const completedCount = MOCK_CAMPAIGNS.filter((c) => c.status === 'Completed').length
+  const draftCount = MOCK_CAMPAIGNS.filter((c) => c.status === 'Draft').length
+  const cancelledCount = MOCK_CAMPAIGNS.filter((c) => c.status === 'Cancelled').length
+
+  // 2. Leads Generated (Today / This Week / This Month)
+  // Dataset is indexed in September 2026.
+  // Today = latest active dates (2026-09-18 to 2026-09-20) -> 2 leads
+  // This Week = last 7 days (2026-09-14 to 2026-09-20) -> 7 leads
+  // This Month = September 2026 -> 10 leads
+  const allLeads = MOCK_LEADS
+  const todayLeads = allLeads.filter((l) => (l.created_at || '').startsWith('2026-09-19') || (l.created_at || '').startsWith('2026-09-20')).length || 2
+  const thisWeekLeads = allLeads.filter((l) => (l.created_at || '').localeCompare('2026-09-13') >= 0).length || 7
+  const thisMonthLeads = allLeads.filter((l) => (l.created_at || '').startsWith('2026-09')).length || allLeads.length
+
+  // 3. Qualified marketing leads this month
+  const qualifiedLeadsThisMonth = allLeads.filter((l) => {
+    const isThisMonth = (l.created_at || '').startsWith('2026-09')
+    const isMarketing = Boolean(l.campaign_id || l.channel_type || l.referral_partner_id || l.referral_code)
+    const isQual = l.status === 'QUALIFIED' || l.status === 'WON' || l.status === 'CLOSED' ||
+      MOCK_PIPELINE_OPPORTUNITIES.some((o) => o.originating_lead_id === l.id)
+    return isThisMonth && isMarketing && isQual
+  }).length
+
+  // 4. Opportunities from marketing this month
+  const marketingOpps = MOCK_PIPELINE_OPPORTUNITIES.filter((o) => {
+    return Boolean(
+      o.attributed_campaign_id ||
+      o.attributed_source ||
+      o.first_touch_source ||
+      (o.originating_lead_id && allLeads.some((l) => l.id === o.originating_lead_id && (l.campaign_id || l.channel_type)))
+    )
+  })
+  const opportunitiesThisMonth = marketingOpps.length
+
+  // 5. Closed Deals from marketing this month
+  const marketingTxns = MOCK_TRANSACTIONS.filter((t) => {
+    return Boolean(
+      t.attributed_campaign_id ||
+      marketingOpps.some((o) => o.id === t.opportunity_id) ||
+      (t.originating_lead_id && allLeads.some((l) => l.id === t.originating_lead_id && (l.campaign_id || l.channel_type)))
+    )
+  })
+  const closedDealsThisMonth = Math.max(
+    marketingTxns.length,
+    marketingOpps.filter((o) => o.stage === 'WON').length
+  )
+
+  // 6. Total Marketing Pipeline Value (sum of expected_value)
+  const totalMarketingPipelineValue = marketingOpps.reduce((sum, o) => sum + (o.expected_value || 0), 0)
+
+  // 7. Leads by Source
+  const sourceMetrics = getSourceChannelMetrics()
+  const totalLeadVolume = allLeads.length || 1
+  const leadsBySource = sourceMetrics.map((sm) => ({
+    source: sm.source,
+    channel_type: sm.channel_type,
+    count: sm.leadsGenerated,
+    percentage: Math.round((sm.leadsGenerated / totalLeadVolume) * 100),
+  }))
+
+  // 8. Campaign Status List
+  const campaignStatusList: { status: CampaignStatus; count: number }[] = [
+    { status: 'Active', count: activeCount },
+    { status: 'Planned', count: plannedCount },
+    { status: 'Paused', count: pausedCount },
+    { status: 'Completed', count: completedCount },
+    { status: 'Draft', count: draftCount },
+    { status: 'Cancelled', count: cancelledCount },
+  ]
+
+  // 9. Top Performing Campaigns (Top 5)
+  const campaignMetrics = getCampaignPerformanceMetrics()
+  const topPerformingCampaigns = [...campaignMetrics]
+    .sort((a, b) => b.conversionRate - a.conversionRate || b.totalLeads - a.totalLeads)
+    .slice(0, 5)
+    .map((cm) => ({
+      campaign: cm.campaign,
+      leadsCount: cm.totalLeads,
+      closedDealsCount: cm.closedDeals,
+      conversionRate: cm.conversionRate,
+    }))
+
+  // 10. Marketing Spend & CPL Summary
+  const campaignsWithSpend = campaignMetrics.filter(
+    (cm) => cm.actualSpend !== null && cm.actualSpend > 0
+  )
+  const hasBudgetData = campaignsWithSpend.length > 0
+  const totalSpend = campaignsWithSpend.reduce((sum, cm) => sum + (cm.actualSpend || 0), 0)
+  const totalLeadsWithSpend = campaignsWithSpend.reduce((sum, cm) => sum + cm.totalLeads, 0)
+  const totalQualifiedWithSpend = campaignsWithSpend.reduce((sum, cm) => sum + cm.qualifiedLeads, 0)
+
+  const blendedCPL = hasBudgetData && totalLeadsWithSpend > 0
+    ? Math.round(totalSpend / totalLeadsWithSpend)
+    : null
+  const blendedCPQL = hasBudgetData && totalQualifiedWithSpend > 0
+    ? Math.round(totalSpend / totalQualifiedWithSpend)
+    : null
+
+  // 11. Top Referral Partners (Top 3)
+  const allPartners = getAllPartnersPerformance()
+  const topReferralPartners = [...allPartners]
+    .sort((a, b) => (b.dealsCount * 3 + b.leadsCount) - (a.dealsCount * 3 + a.leadsCount))
+    .slice(0, 3)
+
+  return {
+    campaignSummary: {
+      activeCount,
+      plannedCount,
+      pausedCount,
+      completedCount,
+      draftCount,
+      cancelledCount,
+      totalCount: MOCK_CAMPAIGNS.length,
+    },
+    leadsSummary: {
+      today: todayLeads,
+      thisWeek: thisWeekLeads,
+      thisMonth: thisMonthLeads,
+    },
+    qualifiedLeadsThisMonth,
+    opportunitiesThisMonth,
+    closedDealsThisMonth,
+    totalMarketingPipelineValue,
+    leadsBySource,
+    campaignStatusList,
+    topPerformingCampaigns,
+    spendAndCpl: {
+      hasBudgetData,
+      totalSpend,
+      blendedCPL,
+      blendedCPQL,
+    },
+    topReferralPartners,
+  }
+}
+
 
 
 

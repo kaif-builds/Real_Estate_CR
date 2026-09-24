@@ -60,11 +60,13 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'MARKETING',
     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'],
     items: [
-      { label: 'Campaigns',         href: '/campaigns',               icon: Megaphone, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Telemarketing',     href: '/telemarketing-campaigns', icon: PhoneCall, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Lead Sources',      href: '/lead-sources',            icon: Share2,    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Referral Partners', href: '/referral-partners',       icon: Handshake, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Traceability',      href: '/marketing-traceability',  icon: GitFork,   roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Marketing Dashboard', href: '/marketing-dashboard',     icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Campaigns',           href: '/campaigns',               icon: Megaphone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Telemarketing',       href: '/telemarketing-campaigns', icon: PhoneCall,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Lead Sources',        href: '/lead-sources',            icon: Share2,          roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Referral Partners',   href: '/referral-partners',       icon: Handshake,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Traceability',        href: '/marketing-traceability',  icon: GitFork,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Campaign Analytics',  href: '/campaign-analytics',      icon: BarChart3,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
     ],
   },
   {
