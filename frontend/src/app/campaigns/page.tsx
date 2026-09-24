@@ -30,7 +30,8 @@ import {
   XCircle, Eye, ArrowRight, Layers, Tag, MapPin, IndianRupee,
   FileText, Check, ChevronRight, BarChart3, ShieldCheck,
   Trash2, Edit3, Image, Video, Sparkles, Filter, CheckSquare,
-  Square, AlertTriangle, ExternalLink, ArrowUpRight, GitFork, Briefcase, Handshake
+  Square, AlertTriangle, ExternalLink, ArrowUpRight, GitFork, Briefcase, Handshake,
+  FolderOpen, FileCode, Copy
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
@@ -45,11 +46,11 @@ import { formatPrice, formatDate, formatCategory } from '@/lib/formatters'
 import {
   MOCK_CAMPAIGNS, MOCK_LEADS, MOCK_USERS, MOCK_PROPERTIES,
   MOCK_CAMPAIGN_PROMOTIONS, getDemandGaps, getMarketingTraceableChains,
-  MOCK_REFERRAL_PARTNERS,
+  MOCK_REFERRAL_PARTNERS, MOCK_CONTENT_ITEMS,
   type CampaignRow, type CampaignType, type CampaignStatus,
   type TargetAudienceType, type PropertyCategoryType, type TransactionType,
   type LeadRow, type CampaignPropertyPromotion, type DemandGapItem, type PropertyRow,
-  type ReferralPartnerRow
+  type ReferralPartnerRow, type MarketingContentItem, type MarketingContentType
 } from '@/lib/mockData'
 
 // ── Dropdown Constants ────────────────────────────────────────────────────────
@@ -224,7 +225,18 @@ function CampaignsContent() {
     }
     return null
   })
-  const [detailTab, setDetailTab] = useState<'overview' | 'properties' | 'leads' | 'partners'>(initialTab)
+  const [detailTab, setDetailTab] = useState<'overview' | 'properties' | 'leads' | 'partners' | 'content'>(initialTab)
+
+  // Campaign Content State
+  const [campaignContentItems, setCampaignContentItems] = useState<MarketingContentItem[]>(MOCK_CONTENT_ITEMS)
+  const [showAddContentModal, setShowAddContentModal] = useState(false)
+  const [contentModalMode, setContentModalMode] = useState<'create' | 'attach'>('create')
+  const [newContentName, setNewContentName] = useState('')
+  const [newContentType, setNewContentType] = useState<MarketingContentType>('Ad Copy')
+  const [newContentText, setNewContentText] = useState('')
+  const [newContentFile, setNewContentFile] = useState('')
+  const [newContentPropertyId, setNewContentPropertyId] = useState('')
+  const [selectedExistingContentId, setSelectedExistingContentId] = useState('')
 
   // Partner Associations State
   const [campaignPartnersMap, setCampaignPartnersMap] = useState<Record<string, string[]>>(() => {
@@ -1383,6 +1395,20 @@ function CampaignsContent() {
                     {(campaignPartnersMap[selectedCampaign.id] || []).length}
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('content')}
+                  className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                    detailTab === 'content'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <FolderOpen size={14} /> Content
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-100 text-indigo-700 font-bold">
+                    {campaignContentItems.filter(i => i.linked_campaign_ids.includes(selectedCampaign.id)).length}
+                  </span>
+                </button>
               </div>
 
               {/* Tab 1: Overview */}
@@ -2003,6 +2029,125 @@ function CampaignsContent() {
                 )
               })()}
 
+              {/* Tab 5: Content */}
+              {detailTab === 'content' && (() => {
+                const linkedItems = campaignContentItems.filter((i) =>
+                  i.linked_campaign_ids.includes(selectedCampaign.id)
+                )
+                return (
+                  <div className="space-y-4 pt-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <FolderOpen size={14} className="text-indigo-600" /> Campaign Collateral & Content ({linkedItems.length})
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          Promotional creative assets, ad copies, videos, brochures, and call scripts linked to this campaign.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href="/content-library"
+                          className="text-xs text-indigo-600 hover:underline inline-flex items-center gap-1 font-medium mr-2"
+                        >
+                          Content Library <ExternalLink size={11} />
+                        </Link>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setContentModalMode('create')
+                            setNewContentName('')
+                            setNewContentType('Ad Copy')
+                            setNewContentText('')
+                            setNewContentFile('')
+                            setNewContentPropertyId('')
+                            setShowAddContentModal(true)
+                          }}
+                          className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1"
+                        >
+                          <Plus size={13} /> + Add Content
+                        </Button>
+                      </div>
+                    </div>
+
+                    {linkedItems.length === 0 ? (
+                      <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50 space-y-3">
+                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                          <FolderOpen size={22} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-800">No Content Linked Yet</h4>
+                          <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                            Add ad copies, brochures, call scripts, or social banners specifically for {selectedCampaign.name}.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAddContentModal(true)}
+                          className="text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                        >
+                          <Plus size={13} className="mr-1" /> Add First Creative
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {linkedItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="border border-slate-200 rounded-lg p-3.5 bg-white hover:border-indigo-300 transition-all space-y-2 flex flex-col justify-between"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="font-semibold text-xs text-slate-900 line-clamp-1">{item.name}</span>
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
+                                  {item.type}
+                                </span>
+                              </div>
+
+                              {item.text_content ? (
+                                <p className="text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-100 line-clamp-3">
+                                  &ldquo;{item.text_content}&rdquo;
+                                </p>
+                              ) : (
+                                <div className="text-[11px] font-mono text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 truncate flex items-center gap-1.5">
+                                  <FileCode size={12} className="text-indigo-600 shrink-0" />
+                                  <span>{item.file_name}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+                              <span>By {item.uploaded_by}</span>
+                              <button
+                                onClick={() => {
+                                  // Disassociate from this campaign
+                                  setCampaignContentItems((prev) =>
+                                    prev.map((i) =>
+                                      i.id === item.id
+                                        ? {
+                                            ...i,
+                                            linked_campaign_ids: i.linked_campaign_ids.filter(
+                                              (id) => id !== selectedCampaign.id
+                                            ),
+                                          }
+                                        : i
+                                    )
+                                  )
+                                }}
+                                className="text-rose-500 hover:text-rose-700 text-[10px]"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* Close Button */}
               <div className="flex justify-end pt-3 border-t border-slate-200">
                 <Button
@@ -2451,6 +2596,221 @@ function CampaignsContent() {
                 Save Associations ({selectedPartnerIds.length})
               </Button>
             </div>
+          </div>
+        </Dialog>
+
+        {/* ── "+ Add Content to Campaign" Dialog ─────────────────────────── */}
+        <Dialog
+          open={showAddContentModal}
+          onClose={() => setShowAddContentModal(false)}
+          title={`Add Content: ${selectedCampaign?.name || ''}`}
+          className="max-w-lg"
+        >
+          <div className="space-y-4 text-xs">
+            {/* Mode Toggle: Create New vs Link Existing */}
+            <div className="flex border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setContentModalMode('create')}
+                className={`flex-1 py-1.5 rounded-md font-semibold text-xs transition-colors ${
+                  contentModalMode === 'create'
+                    ? 'bg-white shadow-xs text-indigo-700 font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Create New Content
+              </button>
+              <button
+                type="button"
+                onClick={() => setContentModalMode('attach')}
+                className={`flex-1 py-1.5 rounded-md font-semibold text-xs transition-colors ${
+                  contentModalMode === 'attach'
+                    ? 'bg-white shadow-xs text-indigo-700 font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Attach From Library
+              </button>
+            </div>
+
+            {contentModalMode === 'create' ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!newContentName.trim() || !selectedCampaign) return
+                  const isFile = ['Image', 'Video', 'Brochure', 'Flyer', 'Social Media Creative'].includes(newContentType)
+                  const item: MarketingContentItem = {
+                    id: `CNT-${Date.now().toString().slice(-4)}`,
+                    name: newContentName.trim(),
+                    type: newContentType,
+                    linked_campaign_ids: [selectedCampaign.id],
+                    linked_property_id: newContentPropertyId || null,
+                    uploaded_by: 'Neha Kapoor',
+                    date_added: new Date().toISOString(),
+                    file_name: isFile ? (newContentFile.trim() || 'asset.dat') : null,
+                    file_url: isFile ? `/assets/mock/${newContentFile.trim() || 'asset.dat'}` : null,
+                    text_content: !isFile ? newContentText.trim() : null,
+                    tags: [selectedCampaign.type, selectedCampaign.geography.split(',')[0]],
+                  }
+                  setCampaignContentItems((prev) => [item, ...prev])
+                  setShowAddContentModal(false)
+                }}
+                className="space-y-3"
+              >
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700">Content Name *</Label>
+                  <Input
+                    placeholder="e.g. Campaign Launch Ad Copy"
+                    value={newContentName}
+                    onChange={(e) => setNewContentName(e.target.value)}
+                    required
+                    className="text-xs h-8"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">Content Type *</Label>
+                    <Select
+                      value={newContentType}
+                      onChange={(e) => setNewContentType(e.target.value as MarketingContentType)}
+                      className="text-xs h-8"
+                    >
+                      <option value="Ad Copy">Ad Copy</option>
+                      <option value="Image">Image</option>
+                      <option value="Video">Video</option>
+                      <option value="Brochure">Brochure</option>
+                      <option value="Flyer">Flyer</option>
+                      <option value="Call Script">Call Script</option>
+                      <option value="Social Media Creative">Social Media Creative</option>
+                      <option value="Property Description">Property Description</option>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">Linked Property (Optional)</Label>
+                    <Select
+                      value={newContentPropertyId}
+                      onChange={(e) => setNewContentPropertyId(e.target.value)}
+                      className="text-xs h-8"
+                    >
+                      <option value="">None (General Campaign)</option>
+                      {MOCK_PROPERTIES.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.id} — {p.short_loc}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+
+                {['Image', 'Video', 'Brochure', 'Flyer', 'Social Media Creative'].includes(newContentType) ? (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">File Attachment (Mock Name) *</Label>
+                    <Input
+                      placeholder="e.g. banner_launch.jpg"
+                      value={newContentFile}
+                      onChange={(e) => setNewContentFile(e.target.value)}
+                      required
+                      className="text-xs h-8"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold text-slate-700">Content Body *</Label>
+                    <Textarea
+                      placeholder="Write copy or script..."
+                      value={newContentText}
+                      onChange={(e) => setNewContentText(e.target.value)}
+                      required
+                      rows={3}
+                      className="text-xs"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddContentModal(false)}
+                    className="text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="sm" className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
+                    Save to Campaign
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              /* Attach Existing Library Item */
+              <div className="space-y-3">
+                <p className="text-slate-500 text-[11px]">
+                  Select an existing collateral item from the library to associate with this campaign:
+                </p>
+                <div className="max-h-48 overflow-y-auto space-y-1.5 border border-slate-200 rounded-lg p-2">
+                  {campaignContentItems
+                    .filter((item) => selectedCampaign && !item.linked_campaign_ids.includes(selectedCampaign.id))
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedExistingContentId(item.id)}
+                        className={`p-2 rounded-md border text-xs cursor-pointer transition-colors flex items-center justify-between ${
+                          selectedExistingContentId === item.id
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-semibold'
+                            : 'hover:bg-slate-50 border-slate-100 text-slate-800'
+                        }`}
+                      >
+                        <div className="truncate mr-2">
+                          <div>{item.name}</div>
+                          <span className="text-[10px] text-slate-400 font-mono">{item.type}</span>
+                        </div>
+                        <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                          {item.linked_campaign_ids.length} linked
+                        </span>
+                      </div>
+                    ))}
+                  {campaignContentItems.filter((item) => selectedCampaign && !item.linked_campaign_ids.includes(selectedCampaign.id)).length === 0 && (
+                    <p className="text-center text-slate-400 py-4 text-xs">All existing library items are already linked to this campaign.</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddContentModal(false)}
+                    className="text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!selectedExistingContentId || !selectedCampaign}
+                    onClick={() => {
+                      if (selectedExistingContentId && selectedCampaign) {
+                        setCampaignContentItems((prev) =>
+                          prev.map((i) =>
+                            i.id === selectedExistingContentId
+                              ? { ...i, linked_campaign_ids: [...i.linked_campaign_ids, selectedCampaign.id] }
+                              : i
+                          )
+                        )
+                        setShowAddContentModal(false)
+                        setSelectedExistingContentId('')
+                      }
+                    }}
+                    className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    Attach Selected Item
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Dialog>
       </div>

@@ -13,6 +13,7 @@ import {
   Settings, Shield, AlertTriangle, FileBarChart,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft,
   Mic, Megaphone, Share2, PhoneCall, GitFork, Handshake,
+  FolderOpen, FileSpreadsheet,
 } from 'lucide-react'
 
 // ── Nav item definitions ──────────────────────────────────────────────────────
@@ -65,8 +66,10 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Telemarketing',       href: '/telemarketing-campaigns', icon: PhoneCall,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Lead Sources',        href: '/lead-sources',            icon: Share2,          roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Referral Partners',   href: '/referral-partners',       icon: Handshake,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Content Library',     href: '/content-library',         icon: FolderOpen,      roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Traceability',        href: '/marketing-traceability',  icon: GitFork,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Campaign Analytics',  href: '/campaign-analytics',      icon: BarChart3,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Marketing MIS',       href: '/marketing-mis',           icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
     ],
   },
   {

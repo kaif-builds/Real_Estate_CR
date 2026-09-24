@@ -3911,6 +3911,261 @@ export function getMarketingDashboardMetrics(): MarketingDashboardData {
   }
 }
 
+// ── Marketing Content Library Types & Dataset ───────────────────────────────────
+
+export type MarketingContentType =
+  | 'Property Description'
+  | 'Ad Copy'
+  | 'Image'
+  | 'Video'
+  | 'Brochure'
+  | 'Flyer'
+  | 'Social Media Creative'
+  | 'Campaign Message'
+  | 'Call Script'
+  | 'Other'
+
+export interface MarketingContentItem {
+  id: string
+  name: string
+  type: MarketingContentType
+  linked_campaign_ids: string[]
+  linked_property_id?: string | null
+  uploaded_by: string
+  date_added: string
+  file_name?: string | null
+  file_url?: string | null
+  text_content?: string | null
+  tags?: string[]
+}
+
+export const MOCK_CONTENT_ITEMS: MarketingContentItem[] = [
+  {
+    id: 'CNT-101',
+    name: 'Super Corridor Prime Commercial Ad Copy',
+    type: 'Ad Copy',
+    linked_campaign_ids: ['CMP-2026-001', 'CMP-2026-002'], // Linked to 2 campaigns for multi-campaign reuse!
+    linked_property_id: 'P-1003',
+    uploaded_by: 'Neha Kapoor',
+    date_added: '2026-09-02T10:30:00Z',
+    file_name: null,
+    text_content: 'Invest in the future of Indore! Ultra-premium 3BHK high-rise suites and commercial plots directly adjacent to the IT SEZ corridor. High rental yields, 100% clear titles, and world-class amenities. Schedule your private site visit today!',
+    tags: ['Super Corridor', 'Ad Copy', 'High-Rise', 'SEZ'],
+  },
+  {
+    id: 'CNT-102',
+    name: 'Mayank Blue Star Luxury Elevation Render',
+    type: 'Image',
+    linked_campaign_ids: ['CMP-2026-001'],
+    linked_property_id: 'P-1003',
+    uploaded_by: 'Aman Desai',
+    date_added: '2026-09-03T14:15:00Z',
+    file_name: 'mayank_bluestar_facade_dusk.jpg',
+    file_url: '/assets/mock/mayank_bluestar.jpg',
+    text_content: null,
+    tags: ['Render', 'Elevation', 'Luxury', 'Facade'],
+  },
+  {
+    id: 'CNT-103',
+    name: 'Scheme 140 Luxury Penthouse Walkthrough',
+    type: 'Video',
+    linked_campaign_ids: ['CMP-2026-002'],
+    linked_property_id: 'P-1003',
+    uploaded_by: 'Aman Desai',
+    date_added: '2026-09-11T16:00:00Z',
+    file_name: 'penthouse_360_tour_4k.mp4',
+    file_url: '/assets/mock/penthouse_tour.mp4',
+    text_content: null,
+    tags: ['Video', '360 Tour', 'Penthouse', 'Scheme 140'],
+  },
+  {
+    id: 'CNT-104',
+    name: 'Scheme 140 Comprehensive Project Brochure',
+    type: 'Brochure',
+    linked_campaign_ids: ['CMP-2026-002'],
+    linked_property_id: 'P-1003',
+    uploaded_by: 'Neha Kapoor',
+    date_added: '2026-09-12T11:20:00Z',
+    file_name: 'scheme140_luxury_living_brochure_v2.pdf',
+    file_url: '/assets/mock/scheme140_brochure.pdf',
+    text_content: null,
+    tags: ['Brochure', 'PDF', 'Floorplans'],
+  },
+  {
+    id: 'CNT-105',
+    name: 'MG Road Ready Corporate Offices Pitch Flyer',
+    type: 'Flyer',
+    linked_campaign_ids: ['CMP-2026-003'],
+    linked_property_id: 'P-1005',
+    uploaded_by: 'Ravi Mehta',
+    date_added: '2026-08-16T09:45:00Z',
+    file_name: 'mg_road_corporate_plug_and_play.pdf',
+    file_url: '/assets/mock/flyer_mgroad.pdf',
+    text_content: null,
+    tags: ['Commercial', 'Flyer', 'Lease', 'Office'],
+  },
+  {
+    id: 'CNT-106',
+    name: 'Vijay Nagar Landlord Mandate Outbound Script',
+    type: 'Call Script',
+    linked_campaign_ids: ['CMP-2026-004'],
+    linked_property_id: 'P-1001',
+    uploaded_by: 'Neha Kapoor',
+    date_added: '2026-07-02T13:00:00Z',
+    file_name: null,
+    text_content: 'Good day [Owner Name], this is [Telecaller] calling from PropDesk Indore. We represent verified corporate tenants seeking premium 2BHK/3BHK rentals in Scheme 140 and Vijay Nagar with zero vacancy downtime and full agreement handling. Do you currently have available units ready for lease?',
+    tags: ['Call Script', 'Telemarketing', 'Landlords'],
+  },
+  {
+    id: 'CNT-107',
+    name: 'Diwali Festive Plot Pre-Launch WhatsApp Creative',
+    type: 'Social Media Creative',
+    linked_campaign_ids: ['CMP-2026-005'],
+    linked_property_id: null,
+    uploaded_by: 'Priya Sharma',
+    date_added: '2026-09-19T10:00:00Z',
+    file_name: 'diwali_festive_plot_offer_1080x1080.png',
+    file_url: '/assets/mock/diwali_banner.png',
+    text_content: null,
+    tags: ['Social Media', 'WhatsApp', 'Festive Offer', 'Plots'],
+  },
+  {
+    id: 'CNT-108',
+    name: 'Central Mall Prime Commercial Showroom Description',
+    type: 'Property Description',
+    linked_campaign_ids: ['CMP-2026-006', 'CMP-2026-003'],
+    linked_property_id: 'P-1006',
+    uploaded_by: 'Aman Desai',
+    date_added: '2026-09-21T15:30:00Z',
+    file_name: null,
+    text_content: 'Prime 4,500 sq.ft double-height retail showroom located at Central Mall, MG Road. Features 60ft road frontage, basement valet parking, and 100% backup power. Ideal for luxury retail or financial institutions.',
+    tags: ['Property Description', 'Retail', 'Showroom', 'MG Road'],
+  },
+]
+
+export function getContentItemsForCampaign(campaignId: string): MarketingContentItem[] {
+  return MOCK_CONTENT_ITEMS.filter((item) => item.linked_campaign_ids.includes(campaignId))
+}
+
+// ── Marketing MIS Date-Filtered Metrics Helper ─────────────────────────────────
+
+export function isDateInRange(
+  dateStr: string | null | undefined,
+  startDate?: string | null,
+  endDate?: string | null
+): boolean {
+  if (!startDate && !endDate) return true
+  if (!dateStr) return true
+  const dateVal = dateStr.slice(0, 10)
+  if (startDate && dateVal < startDate) return false
+  if (endDate && dateVal > endDate) return false
+  return true
+}
+
+export function isPeriodInRange(
+  itemStart: string | null | undefined,
+  itemEnd: string | null | undefined,
+  startDate?: string | null,
+  endDate?: string | null
+): boolean {
+  if (!startDate && !endDate) return true
+  const s = itemStart ? itemStart.slice(0, 10) : '2000-01-01'
+  const e = itemEnd ? itemEnd.slice(0, 10) : '2099-12-31'
+  if (startDate && e < startDate) return false
+  if (endDate && s > endDate) return false
+  return true
+}
+
+export interface FunnelStageData {
+  stage: string
+  count: number
+  conversionFromTotal: number // % of total leads
+  dropOffRate: number // % drop-off from previous stage
+}
+
+export function getMarketingFunnelMetrics(
+  scopeType: 'all' | 'campaign' | 'source' = 'all',
+  scopeId?: string | null,
+  startDate?: string | null,
+  endDate?: string | null
+): FunnelStageData[] {
+  // 1. Filter Leads by date range and scope
+  let leads = MOCK_LEADS.filter((l) => isDateInRange(l.created_at, startDate, endDate))
+  if (scopeType === 'campaign' && scopeId) {
+    leads = leads.filter((l) => l.campaign_id === scopeId)
+  } else if (scopeType === 'source' && scopeId) {
+    leads = leads.filter((l) => l.source === scopeId)
+  }
+
+  const leadIds = new Set(leads.map((l) => l.id))
+  const partyIds = new Set(leads.map((l) => l.party_id))
+
+  // 2. Qualified Leads (strictly from filtered leads)
+  const qualifiedLeads = leads.filter((l) => {
+    if (l.status === 'QUALIFIED' || l.status === 'WON' || l.status === 'CLOSED') return true
+    return MOCK_PIPELINE_OPPORTUNITIES.some(
+      (o) => o.originating_lead_id === l.id || o.client_id === l.party_id
+    )
+  })
+
+  // 3. Opportunities traced from these leads
+  let opps = MOCK_PIPELINE_OPPORTUNITIES.filter(
+    (o) =>
+      (o.originating_lead_id && leadIds.has(o.originating_lead_id)) ||
+      partyIds.has(o.client_id) ||
+      (scopeType === 'campaign' && scopeId && o.attributed_campaign_id === scopeId)
+  ).filter((o) => isDateInRange(o.created_at || o.closed_at, startDate, endDate))
+
+  // 4. Closed Deals traced from these opportunities or leads
+  const oppIds = new Set(opps.map((o) => o.id))
+  const txns = MOCK_TRANSACTIONS.filter(
+    (t) =>
+      oppIds.has(t.opportunity_id) ||
+      (t.originating_lead_id && leadIds.has(t.originating_lead_id)) ||
+      (scopeType === 'campaign' && scopeId && t.attributed_campaign_id === scopeId)
+  ).filter((t) => isDateInRange(t.closed_date, startDate, endDate))
+
+  const wonOpps = opps.filter((o) => o.stage === 'WON')
+  const closedCount = Math.max(txns.length, wonOpps.length)
+
+  // Enforce hierarchical constraint: Total Leads >= Qualified Leads >= Opportunities >= Deals
+  const countLeads = leads.length
+  const countQualified = Math.min(qualifiedLeads.length, countLeads)
+  const countOpps = Math.min(opps.length, countQualified)
+  const countDeals = Math.min(closedCount, countOpps)
+
+  const pct = (num: number, denom: number) =>
+    denom > 0 ? Math.round((num / denom) * 1000) / 10 : 0
+
+  return [
+    {
+      stage: 'Total Leads',
+      count: countLeads,
+      conversionFromTotal: 100,
+      dropOffRate: 0,
+    },
+    {
+      stage: 'Qualified Leads',
+      count: countQualified,
+      conversionFromTotal: pct(countQualified, countLeads),
+      dropOffRate: pct(countLeads - countQualified, countLeads),
+    },
+    {
+      stage: 'Opportunities',
+      count: countOpps,
+      conversionFromTotal: pct(countOpps, countLeads),
+      dropOffRate: pct(countQualified - countOpps, countQualified),
+    },
+    {
+      stage: 'Closed Deals',
+      count: countDeals,
+      conversionFromTotal: pct(countDeals, countLeads),
+      dropOffRate: pct(countOpps - countDeals, countOpps),
+    },
+  ]
+}
+
+
 
 
 
