@@ -2337,7 +2337,7 @@ export interface AuditLogRow {
   user_id: string
   user_name: string
   user_role: string
-  action: 'Created' | 'Updated' | 'Deleted' | 'Status Changed'
+  action: 'Created' | 'Updated' | 'Deleted' | 'Status Changed' | 'Cancelled' | 'Query' | 'Clarification' | 'Failed'
   entity_type:
     | 'Property'
     | 'Requirement'
@@ -2350,6 +2350,8 @@ export interface AuditLogRow {
     | 'Follow-up'
     | 'Task'
     | 'Campaign'
+    | 'General'
+    | 'Workflow'
   entity_id: string
   summary: string
   details?: Record<string, any>
@@ -2448,6 +2450,237 @@ export const MOCK_AUDIT_LOGS: AuditLogRow[] = [
           final_values: { client_name: 'Rajesh Kumar', purpose: 'Discuss pricing', due_date: '2026-09-28T10:00', entity_id: 'L-1004' },
         },
       ],
+    },
+  },
+  {
+    id: 'AUD-AI-103',
+    timestamp: '2026-09-25 15:40:10',
+    user_id: 'u3',
+    user_name: 'Ravi Mehta',
+    user_role: 'AGENT',
+    action: 'Created',
+    entity_type: 'Requirement',
+    entity_id: 'R-7001',
+    summary: '[AI-assisted] Created Requirement R-7001 for Vikram Singh (BUY_SELL_FLAT / BUY) (via AI Assistant)',
+    details: { min_budget: 5000000, max_budget: 7000000, matches_found: 3 },
+    ip_address: '103.21.58.11',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Create a requirement for Vikram Singh, 2BHK flat in Scheme 140, budget 50-70 lakhs',
+      interpreted_intent: 'create_requirement',
+      proposed_values: { client_name: 'Vikram Singh', category: 'BUY_SELL_FLAT', intent: 'BUY', preferred_short_locs: '01-Schm140_Mayank', min_budget: '5000000', max_budget: '7000000' },
+      user_edits: {},
+      final_values: { client_name: 'Vikram Singh', category: 'BUY_SELL_FLAT', intent: 'BUY', preferred_short_locs: '01-Schm140_Mayank', min_budget: '5000000', max_budget: '7000000' },
+    },
+  },
+  {
+    id: 'AUD-AI-104',
+    timestamp: '2026-09-24 16:22:30',
+    user_id: 'u1',
+    user_name: 'Aman Desai',
+    user_role: 'SUPER_ADMIN',
+    action: 'Status Changed',
+    entity_type: 'Opportunity',
+    entity_id: 'OPP-5001',
+    summary: '[AI-assisted] Updated OPP-5001 from SITE_VISIT → NEGOTIATION (via AI Assistant)',
+    details: { opportunity_id: 'OPP-5001', old_stage: 'SITE_VISIT', new_stage: 'NEGOTIATION' },
+    ip_address: '192.168.1.10',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Move Ramesh Patel deal to negotiation stage',
+      interpreted_intent: 'update_deal_stage',
+      proposed_values: { opportunity_id: 'OPP-5001', new_stage: 'NEGOTIATION' },
+      user_edits: { new_stage: 'NEGOTIATION' },
+      final_values: { opportunity_id: 'OPP-5001', new_stage: 'NEGOTIATION' },
+    },
+  },
+  {
+    id: 'AUD-AI-105',
+    timestamp: '2026-09-24 14:10:05',
+    user_id: 'u4',
+    user_name: 'Priya Sharma',
+    user_role: 'AGENT',
+    action: 'Cancelled',
+    entity_type: 'Visit',
+    entity_id: 'PROPOSAL-CANCELLED',
+    summary: '[AI-assisted] Cancelled proposed site visit at Vijay Nagar for Amit Jain',
+    details: { reason: 'User chose to reschedule manually' },
+    ip_address: '192.168.1.15',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Schedule a visit for Amit Jain at Vijay Nagar tomorrow',
+      interpreted_intent: 'schedule_visit',
+      proposed_values: { client_name: 'Amit Jain', property_short_loc: '04-Vijay_Nagar', agent_name: 'Priya Sharma', scheduled_date: '2026-09-25T11:00' },
+      user_edits: {},
+      final_values: {},
+    },
+  },
+  {
+    id: 'AUD-AI-106',
+    timestamp: '2026-09-24 11:05:40',
+    user_id: 'u3',
+    user_name: 'Ravi Mehta',
+    user_role: 'AGENT',
+    action: 'Query',
+    entity_type: 'General',
+    entity_id: 'QUERY-LEADS',
+    summary: '[AI-assisted] Read-only query: "How many active leads do we have?" (Found 8 leads)',
+    details: { entity_queried: 'Leads', record_count: 8 },
+    ip_address: '103.21.58.11',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'How many active leads do we have?',
+      interpreted_intent: 'query_data',
+      proposed_values: {},
+      user_edits: {},
+      final_values: {},
+    },
+  },
+  {
+    id: 'AUD-AI-107',
+    timestamp: '2026-09-23 16:50:12',
+    user_id: 'u2',
+    user_name: 'Neha Kapoor',
+    user_role: 'OFFICE_EXECUTIVE',
+    action: 'Query',
+    entity_type: 'General',
+    entity_id: 'QUERY-PROPERTIES',
+    summary: '[AI-assisted] Read-only query: "What properties are available in Scheme 140?" (Found 2 properties)',
+    details: { entity_queried: 'Properties', record_count: 2 },
+    ip_address: '192.168.1.42',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'What properties are available in Scheme 140?',
+      interpreted_intent: 'query_data',
+      proposed_values: {},
+      user_edits: {},
+      final_values: {},
+    },
+  },
+  {
+    id: 'AUD-AI-108',
+    timestamp: '2026-09-23 12:30:00',
+    user_id: 'u1',
+    user_name: 'Aman Desai',
+    user_role: 'SUPER_ADMIN',
+    action: 'Created',
+    entity_type: 'Task',
+    entity_id: 'T-901',
+    summary: '[AI-assisted] Created Task T-901 "Verify title deeds for Ravi Mehta" (via AI Assistant)',
+    details: { task_type: 'Verification', priority: 'HIGH', due_date: '2026-09-27T10:00' },
+    ip_address: '192.168.1.10',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Create a task to verify title deeds for Ravi Mehta by Sunday',
+      interpreted_intent: 'create_task',
+      proposed_values: { title: 'Verify title deeds for Ravi Mehta', assigned_to_name: 'Neha Kapoor', due_date: '2026-09-27T10:00', priority: 'MEDIUM' },
+      user_edits: { priority: 'HIGH' },
+      final_values: { title: 'Verify title deeds for Ravi Mehta', assigned_to_name: 'Neha Kapoor', due_date: '2026-09-27T10:00', priority: 'HIGH' },
+    },
+  },
+  {
+    id: 'AUD-AI-109',
+    timestamp: '2026-09-22 17:15:45',
+    user_id: 'u4',
+    user_name: 'Priya Sharma',
+    user_role: 'AGENT',
+    action: 'Clarification',
+    entity_type: 'General',
+    entity_id: 'CLARIFY-FIELD',
+    summary: '[AI-assisted] Clarification requested: Missing client phone number for new lead',
+    details: { action_type: 'create_lead', missing_fields: ['phone'] },
+    ip_address: '192.168.1.15',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Add a new lead for Suresh Gupta, looking for 3BHK',
+      interpreted_intent: 'create_lead',
+      proposed_values: { party_name: 'Suresh Gupta', lead_type: 'BUYER' },
+      user_edits: {},
+      final_values: {},
+    },
+  },
+  {
+    id: 'AUD-AI-110',
+    timestamp: '2026-09-22 10:20:18',
+    user_id: 'u3',
+    user_name: 'Ravi Mehta',
+    user_role: 'AGENT',
+    action: 'Clarification',
+    entity_type: 'General',
+    entity_id: 'CLARIFY-AMBIGUOUS',
+    summary: '[AI-assisted] Clarification requested: Multiple opportunities found for client "Sharma"',
+    details: { action_type: 'update_deal_stage', candidates: ['OPP-5002', 'OPP-5005'] },
+    ip_address: '103.21.58.11',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Move Sharma\'s opportunity to won stage',
+      interpreted_intent: 'update_deal_stage',
+      proposed_values: { client_name: 'Sharma' },
+      user_edits: {},
+      final_values: {},
+    },
+  },
+  {
+    id: 'AUD-AI-111',
+    timestamp: '2026-09-21 15:45:00',
+    user_id: 'u1',
+    user_name: 'Aman Desai',
+    user_role: 'SUPER_ADMIN',
+    action: 'Failed',
+    entity_type: 'Opportunity',
+    entity_id: 'OPP-5003',
+    summary: '[AI-assisted] Action execution failed: Opportunity OPP-5003 is already closed',
+    details: { error: 'Cannot transition stage on closed deal OPP-5003' },
+    ip_address: '192.168.1.10',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Move OPP-5003 to Documentation',
+      interpreted_intent: 'update_deal_stage',
+      proposed_values: { opportunity_id: 'OPP-5003', new_stage: 'DOCUMENTATION' },
+      user_edits: {},
+      final_values: { opportunity_id: 'OPP-5003', new_stage: 'DOCUMENTATION' },
+    },
+  },
+  {
+    id: 'AUD-AI-112',
+    timestamp: '2026-09-21 11:30:00',
+    user_id: 'u1',
+    user_name: 'Aman Desai',
+    user_role: 'SUPER_ADMIN',
+    action: 'Created',
+    entity_type: 'Campaign',
+    entity_id: 'CMP-2026-004',
+    summary: '[AI-assisted] Created Campaign CMP-2026-004 "Diwali Homes 2026" (via AI Assistant)',
+    details: { type: 'Buyer Acquisition', planned_budget: 150000 },
+    ip_address: '192.168.1.10',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Create a campaign "Diwali Homes 2026" for Buyer Acquisition starting Oct 15 with budget 1.5 lakhs',
+      interpreted_intent: 'create_campaign',
+      proposed_values: { campaign_name: 'Diwali Homes 2026', type: 'Buyer Acquisition', start_date: '2026-10-15', planned_budget: '150000' },
+      user_edits: {},
+      final_values: { campaign_name: 'Diwali Homes 2026', type: 'Buyer Acquisition', start_date: '2026-10-15', planned_budget: '150000' },
+    },
+  },
+  {
+    id: 'AUD-AI-113',
+    timestamp: '2026-09-20 14:02:11',
+    user_id: 'u2',
+    user_name: 'Neha Kapoor',
+    user_role: 'OFFICE_EXECUTIVE',
+    action: 'Cancelled',
+    entity_type: 'Lead',
+    entity_id: 'PROPOSAL-CANCELLED',
+    summary: '[AI-assisted] Cancelled lead creation proposal: duplicate contact detected for Ramesh Patel',
+    details: { reason: 'Duplicate party P-001 already has active lead' },
+    ip_address: '192.168.1.42',
+    ai_assisted: true,
+    ai_trail: {
+      original_request: 'Create a lead for Ramesh Patel, 9826011111',
+      interpreted_intent: 'create_lead',
+      proposed_values: { party_name: 'Ramesh Patel', phone: '9826011111', lead_type: 'BUYER' },
+      user_edits: {},
+      final_values: {},
     },
   },
   {
@@ -4465,9 +4698,11 @@ export function logAiAudit(params: {
   user_role?: string
   ai_trail: AiTrail
   extra_details?: Record<string, any>
+  action?: AuditLogRow['action']
+  entity_type?: AuditLogRow['entity_type']
 }): AuditLogRow {
-  const entityType = INTENT_TO_ENTITY[params.action_type] || 'Lead'
-  const actionVerb: AuditLogRow['action'] = params.action_type === 'update_deal_stage' ? 'Status Changed' : 'Created'
+  const entityType = params.entity_type || INTENT_TO_ENTITY[params.action_type] || 'General'
+  const actionVerb: AuditLogRow['action'] = params.action || (params.action_type === 'update_deal_stage' ? 'Status Changed' : 'Created')
   const newLog: AuditLogRow = {
     id: `AUD-AI-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),

@@ -13,7 +13,7 @@ import {
   Settings, Shield, AlertTriangle, FileBarChart,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft,
   Mic, Megaphone, Share2, PhoneCall, GitFork, Handshake,
-  FolderOpen, FileSpreadsheet, Bot,
+  FolderOpen, FileSpreadsheet, Bot, Sparkles,
 } from 'lucide-react'
 
 // ── Nav item definitions ──────────────────────────────────────────────────────
@@ -120,6 +120,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 const NAV_STANDALONE: NavItem[] = [
   { label: 'AI Assistant', href: '/ai-assistant', icon: Bot, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+  { label: 'AI Management', href: '/ai-management', icon: Sparkles, roles: ['SUPER_ADMIN'] },
 ]
 
 export function Sidebar() {
