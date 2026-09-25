@@ -720,7 +720,14 @@ function SessionLog({ logs }: { logs: AiInteractionLog[] }) {
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-2 text-xs text-slate-500 hover:text-slate-700">
         <span className="flex items-center gap-1.5"><Clock size={12}/>Session Log ({logs.length})</span>{open ? <ChevronDown size={12}/> : <ChevronUp size={12}/>}
       </button>
-      {open && <div className="max-h-48 overflow-y-auto px-4 pb-3 space-y-2">{logs.map(l => (
+      {open && <div className="max-h-48 overflow-y-auto px-4 pb-3 space-y-2">
+        <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-200 text-[11px]">
+          <span className="text-slate-500 font-medium">Session Prompts</span>
+          <Link href="/audit" className="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+            System Audit Log <ExternalLink size={10}/>
+          </Link>
+        </div>
+        {logs.map(l => (
         <div key={l.id} className="text-xs bg-white border border-slate-200 rounded p-2">
           <div className="font-medium text-slate-700 truncate">Q: {l.user_message}</div>
           <div className="text-slate-400 mt-0.5">{l.entity_queried} {'\u00b7'} {l.record_count} rec {'\u00b7'} {new Date(l.timestamp).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
