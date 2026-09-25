@@ -1,8 +1,8 @@
 'use client'
 
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
 import { MOCK_USERS } from '@/lib/mockData'
@@ -40,48 +40,48 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'CRM & LEADS',
-    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'],
+    label: 'LEADS & CLIENTS',
+    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'],
     items: [
-      { label: 'Leads',   href: '/leads',   icon: Users,      roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Parties', href: '/parties', icon: UserCheck,  roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Leads',        href: '/leads',        icon: Users,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Parties',      href: '/parties',      icon: Building2,     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Requirements', href: '/requirements', icon: ClipboardList, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Matching',     href: '/matching',     icon: Zap,           roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
     ],
   },
   {
-    label: 'PROPERTY & INVENTORY',
-    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'],
+    label: 'PROPERTIES',
+    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'],
     items: [
-      { label: 'Inventory',    href: '/inventory',     icon: Building2,     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Requirements', href: '/requirements',  icon: ClipboardList, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Matching',     href: '/matching',      icon: Zap,           roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Demand-Supply',href: '/demand-supply', icon: BarChart3,     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Inventory',     href: '/inventory',     icon: Building2, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Demand/Supply', href: '/demand-supply', icon: BarChart3, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+    ],
+  },
+  {
+    label: 'ACTIVITIES',
+    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'],
+    items: [
+      { label: 'Follow-ups',      href: '/follow-ups',      icon: Bell,        roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Telecalling',     href: '/telecalling',     icon: Phone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Call Recordings', href: '/call-recordings', icon: Mic,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Tasks',           href: '/tasks',           icon: CheckSquare, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+      { label: 'Timeline',        href: '/timeline',        icon: Clock,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
     ],
   },
   {
     label: 'MARKETING',
     roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'],
     items: [
-      { label: 'Marketing Dashboard', href: '/marketing-dashboard',     icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Campaigns',           href: '/campaigns',               icon: Megaphone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Telemarketing',       href: '/telemarketing-campaigns', icon: PhoneCall,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Lead Sources',        href: '/lead-sources',            icon: Share2,          roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Referral Partners',   href: '/referral-partners',       icon: Handshake,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Content Library',     href: '/content-library',         icon: FolderOpen,      roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Traceability',        href: '/marketing-traceability',  icon: GitFork,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Campaign Analytics',  href: '/campaign-analytics',      icon: BarChart3,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Marketing MIS',       href: '/marketing-mis',           icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
-      { label: 'Marketing Settings',  href: '/marketing-settings',      icon: Settings,        roles: ['SUPER_ADMIN'] },
-    ],
-  },
-  {
-    label: 'ACTIVITIES & TASKS',
-    roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'],
-    items: [
-      { label: 'Follow-ups',      href: '/follow-ups',      icon: Bell,        roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
-      { label: 'Telecalling',     href: '/telecalling',     icon: Phone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
-      { label: 'Call Recordings', href: '/call-recordings', icon: Mic,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
-      { label: 'Tasks',           href: '/tasks',           icon: CheckSquare, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
-      { label: 'Timeline',        href: '/timeline',        icon: Clock,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Dashboard',        href: '/marketing-dashboard',    icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Campaigns',        href: '/campaigns',              icon: Megaphone,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Lead Sources',     href: '/lead-sources',           icon: Share2,          roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Telemarketing',    href: '/telemarketing-campaigns',icon: PhoneCall,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Traceability',     href: '/marketing-traceability', icon: GitFork,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Referral Partners',href: '/referral-partners',      icon: Handshake,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Analytics',        href: '/campaign-analytics',     icon: BarChart3,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Marketing MIS',    href: '/marketing-mis',          icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Content Library',  href: '/content-library',        icon: FolderOpen,      roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Marketing Settings', href: '/marketing-settings',   icon: Settings,        roles: ['SUPER_ADMIN'] },
     ],
   },
   {
@@ -123,12 +123,29 @@ const NAV_STANDALONE: NavItem[] = [
   { label: 'AI Management', href: '/ai-management', icon: Sparkles, roles: ['SUPER_ADMIN'] },
 ]
 
+// ── Persistent Module-Level Cache ────────────────────────────────────────────
+// Survives component remounts across client-side page transitions
+let cachedSidebarScrollTop = 0
+let cachedClosedGroups: Record<string, boolean> = {}
+
+if (typeof window !== 'undefined') {
+  try {
+    const savedScroll = sessionStorage.getItem('sidebarScrollTop')
+    if (savedScroll) cachedSidebarScrollTop = Number(savedScroll)
+    const savedGroups = sessionStorage.getItem('sidebarClosedGroups')
+    if (savedGroups) cachedClosedGroups = JSON.parse(savedGroups)
+  } catch {}
+}
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+
 export function Sidebar() {
   const { user } = useAuth()
   const pathname = usePathname()
+  const asideRef = useRef<HTMLElement>(null)
 
   const [collapsed, setCollapsed] = useState(false)
-  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>({})
+  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>(() => cachedClosedGroups)
 
   // Persist collapse state to sessionStorage
   useEffect(() => {
@@ -136,14 +153,51 @@ export function Sidebar() {
     if (stored) setCollapsed(stored === 'true')
   }, [])
 
+  // Restore scroll position synchronously before paint & verify on rAF
+  useIsomorphicLayoutEffect(() => {
+    const restore = () => {
+      if (asideRef.current && cachedSidebarScrollTop > 0) {
+        asideRef.current.scrollTop = cachedSidebarScrollTop
+      }
+    }
+    restore()
+    const rafId = requestAnimationFrame(restore)
+    return () => cancelAnimationFrame(rafId)
+  }, [pathname])
+
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    cachedSidebarScrollTop = e.currentTarget.scrollTop
+    try {
+      sessionStorage.setItem('sidebarScrollTop', String(e.currentTarget.scrollTop))
+    } catch {}
+  }
+
+  const handleLinkClick = () => {
+    if (asideRef.current) {
+      cachedSidebarScrollTop = asideRef.current.scrollTop
+      try {
+        sessionStorage.setItem('sidebarScrollTop', String(asideRef.current.scrollTop))
+      } catch {}
+    }
+  }
+
   const toggleCollapse = () => {
     const next = !collapsed
     setCollapsed(next)
-    sessionStorage.setItem('sidebarCollapsed', String(next))
+    try {
+      sessionStorage.setItem('sidebarCollapsed', String(next))
+    } catch {}
   }
 
   const toggleGroup = (label: string) => {
-    setClosedGroups((prev) => ({ ...prev, [label]: !prev[label] }))
+    setClosedGroups((prev) => {
+      const next = { ...prev, [label]: !prev[label] }
+      cachedClosedGroups = next
+      try {
+        sessionStorage.setItem('sidebarClosedGroups', JSON.stringify(next))
+      } catch {}
+      return next
+    })
   }
 
   const currentUser = user || (MOCK_USERS[0] ? {
@@ -159,6 +213,8 @@ export function Sidebar() {
 
   return (
     <aside
+      ref={asideRef}
+      onScroll={handleScroll}
       className={cn(
         'flex flex-col bg-slate-900 text-slate-100 transition-all duration-200 ease-in-out',
         collapsed ? 'w-16' : 'w-60',
@@ -207,6 +263,8 @@ export function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    scroll={false}
+                    onClick={handleLinkClick}
                     title={collapsed ? item.label : undefined}
                     className={cn(
                       'flex items-center gap-3 px-4 py-2 text-sm transition-colors',
@@ -226,7 +284,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* AI Assistant — standalone item (not in a group) */}
+      {/* AI Assistant & Management — standalone items (not in a group) */}
       {(() => {
         const standaloneItems = NAV_STANDALONE.filter(i => i.roles.includes(currentUser.role))
         if (standaloneItems.length === 0) return null
@@ -239,6 +297,8 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  scroll={false}
+                  onClick={handleLinkClick}
                   title={collapsed ? item.label : undefined}
                   className={cn(
                     'flex items-center gap-3 px-4 py-2 text-sm transition-colors',
