@@ -70,6 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Traceability',        href: '/marketing-traceability',  icon: GitFork,         roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Campaign Analytics',  href: '/campaign-analytics',      icon: BarChart3,       roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
       { label: 'Marketing MIS',       href: '/marketing-mis',           icon: FileSpreadsheet, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE'] },
+      { label: 'Marketing Settings',  href: '/marketing-settings',      icon: Settings,        roles: ['SUPER_ADMIN'] },
     ],
   },
   {

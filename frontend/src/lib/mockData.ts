@@ -2322,7 +2322,15 @@ export interface AuditLogRow {
   user_name: string
   user_role: string
   action: 'Created' | 'Updated' | 'Deleted' | 'Status Changed'
-  entity_type: 'Property' | 'Requirement' | 'Lead' | 'Visit' | 'Opportunity' | 'User' | 'Transaction'
+  entity_type:
+    | 'Property'
+    | 'Requirement'
+    | 'Lead'
+    | 'Visit'
+    | 'Opportunity'
+    | 'User'
+    | 'Transaction'
+    | 'Marketing Config'
   entity_id: string
   summary: string
   details?: Record<string, any>
@@ -2330,6 +2338,32 @@ export interface AuditLogRow {
 }
 
 export const MOCK_AUDIT_LOGS: AuditLogRow[] = [
+  {
+    id: 'AUD-880',
+    timestamp: '2026-09-15 11:20:00',
+    user_id: 'u1',
+    user_name: 'Aman Desai',
+    user_role: 'SUPER_ADMIN',
+    action: 'Created',
+    entity_type: 'Marketing Config',
+    entity_id: 'cfg-ct-8',
+    summary: 'Created Campaign Type: "Lead Generation"',
+    details: { config_group: 'Campaign Types', name: 'Lead Generation', status: 'Active' },
+    ip_address: '192.168.1.10',
+  },
+  {
+    id: 'AUD-879',
+    timestamp: '2026-09-12 16:45:00',
+    user_id: 'u1',
+    user_name: 'Aman Desai',
+    user_role: 'SUPER_ADMIN',
+    action: 'Status Changed',
+    entity_type: 'Marketing Config',
+    entity_id: 'src-off-13',
+    summary: 'Activated Lead Source: "Referral Partner"',
+    details: { config_group: 'Lead Sources', name: 'Referral Partner', new_status: 'Active' },
+    ip_address: '192.168.1.10',
+  },
   {
     id: 'AUD-901',
     timestamp: '2026-09-19 14:15:02',
@@ -4165,7 +4199,107 @@ export function getMarketingFunnelMetrics(
   ]
 }
 
+// ── Marketing Configuration Master Lists & Helpers (Module 7 Part 11) ──────────
 
+export interface MarketingConfigItem {
+  id: string
+  name: string
+  active: boolean
+  category?: string
+  description?: string
+  is_system?: boolean
+  created_at: string
+}
 
+export const DEFAULT_CAMPAIGN_TYPES: MarketingConfigItem[] = [
+  { id: 'cfg-ct-1', name: 'Property Promotion',    active: true, is_system: true, description: 'Showcase featured properties and drive direct buyer/tenant enquiries.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-2', name: 'Buyer Acquisition',     active: true, is_system: true, description: 'Attract prospective home and commercial property buyers.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-3', name: 'Seller Acquisition',    active: true, is_system: true, description: 'Attract property owners and landlords looking to list inventory.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-4', name: 'Tenant Acquisition',    active: true, is_system: true, description: 'Generate rental enquiries for available residential and commercial units.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-5', name: 'Landlord Acquisition',  active: true, is_system: true, description: 'Onboard rental property owners and asset managers.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-6', name: 'Investor Acquisition',  active: true, is_system: true, description: 'Target high-net-worth real estate investors and investment funds.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-7', name: 'Brand Awareness',       active: true, is_system: true, description: 'Build agency recognition and market reputation across target territories.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ct-8', name: 'Lead Generation',       active: true, is_system: true, description: 'Broad top-of-funnel lead capture campaigns across all asset classes.', created_at: '2026-01-01T00:00:00Z' },
+]
 
+export const DEFAULT_TARGET_AUDIENCES: MarketingConfigItem[] = [
+  { id: 'cfg-ta-1', name: 'Buyers',     active: true, is_system: true, description: 'Individual & institutional property buyers.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-2', name: 'Sellers',    active: true, is_system: true, description: 'Property owners and sellers looking to exit.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-3', name: 'Owners',     active: true, is_system: true, description: 'Asset owners seeking property management and leasing.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-4', name: 'Tenants',    active: true, is_system: true, description: 'Residential & commercial tenants seeking lease spaces.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-5', name: 'Landlords',  active: true, is_system: true, description: 'Commercial & residential property landlords.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-6', name: 'Investors',  active: true, is_system: true, description: 'HNI and retail property investors seeking capital appreciation & yields.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-7', name: 'Developers', active: true, is_system: true, description: 'Real estate builders, developers, and project promoters.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-ta-8', name: 'Brokers',    active: true, is_system: true, description: 'External channel partners, co-brokers, and agents.', created_at: '2026-01-01T00:00:00Z' },
+]
+
+export const DEFAULT_PARTNER_CATEGORIES: MarketingConfigItem[] = [
+  { id: 'cfg-pt-1', name: 'Property Consultant', active: true, is_system: true, description: 'Independent property advisors and consulting firms.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-pt-2', name: 'Broker',              active: true, is_system: true, description: 'Licensed external real estate brokers and channel partners.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-pt-3', name: 'Developer',           active: true, is_system: true, description: 'Project developers and builder marketing departments.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-pt-4', name: 'Investor',            active: true, is_system: true, description: 'Institutional and angel real estate investors.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-pt-5', name: 'Corporate Contact',   active: true, is_system: true, description: 'Corporate HR, facility managers, and relocation desks.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-pt-6', name: 'Referral Partner',    active: true, is_system: true, description: 'General client referral and affiliate partners.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-pt-7', name: 'Other',               active: true, is_system: true, description: 'Miscellaneous referral channels and freelance advisors.', created_at: '2026-01-01T00:00:00Z' },
+]
+
+export const DEFAULT_TELEMARKETING_PURPOSES: MarketingConfigItem[] = [
+  { id: 'cfg-cp-1', name: 'Cold Calling',       category: 'Purpose', active: true, is_system: true, description: 'Outbound outreach to cold prospect lists and uncontacted numbers.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cp-2', name: 'Market Survey',       category: 'Purpose', active: true, is_system: true, description: 'Gathering micro-market pricing expectations and buyer sentiment.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cp-3', name: 'Owner Acquisition',   category: 'Purpose', active: true, is_system: true, description: 'Direct calling to property owners to solicit fresh property listings.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cp-4', name: 'Buyer Acquisition',   category: 'Purpose', active: true, is_system: true, description: 'Outreach to verified prospective buyers for hot inventory.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cp-5', name: 'Lead Reactivation',   category: 'Purpose', active: true, is_system: true, description: 'Re-engaging stalled, dormant, or cold historical leads.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cp-6', name: 'Other',               category: 'Purpose', active: true, is_system: true, description: 'General telecalling and custom outbound purposes.', created_at: '2026-01-01T00:00:00Z' },
+]
+
+export const DEFAULT_CALL_DISPOSITIONS: MarketingConfigItem[] = [
+  { id: 'cfg-cd-1', name: 'Not Called',        category: 'Disposition', active: true, is_system: true, description: 'Contact is queued but has not yet been dialled.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-2', name: 'Connected',         category: 'Disposition', active: true, is_system: true, description: 'Call connected successfully with the contact.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-3', name: 'Busy',              category: 'Disposition', active: true, is_system: true, description: 'Phone line was busy or disconnected.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-4', name: 'Call Later',        category: 'Disposition', active: true, is_system: true, description: 'Contact requested a callback at a later time/date.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-5', name: 'Interested',        category: 'Disposition', active: true, is_system: true, description: 'Contact expressed genuine interest in offered property.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-6', name: 'Not Interested',    category: 'Disposition', active: true, is_system: true, description: 'Contact declined the property or requirement.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-7', name: 'Wrong Number',      category: 'Disposition', active: true, is_system: true, description: 'Incorrect phone number or wrong party reached.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-8', name: 'Do Not Contact',    category: 'Disposition', active: true, is_system: true, description: 'Contact requested to be placed on DND list.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cd-9', name: 'Converted to Lead', category: 'Disposition', active: true, is_system: true, description: 'Contact successfully converted into an active CRM Lead.', created_at: '2026-01-01T00:00:00Z' },
+]
+
+export const DEFAULT_CONTENT_TYPES: MarketingConfigItem[] = [
+  { id: 'cfg-cnt-1',  name: 'Property Description',    category: 'Text',     active: true, is_system: true, description: 'Formatted narrative descriptions, USPs, and specifications.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-2',  name: 'Ad Copy',                 category: 'Text',     active: true, is_system: true, description: 'Headlines, taglines, and punchy body copy for advertisements.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-3',  name: 'Image',                   category: 'Media',    active: true, is_system: true, description: 'High-res photos, floor plans, 3D renders, and elevation stills.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-4',  name: 'Video',                   category: 'Media',    active: true, is_system: true, description: 'Walkthrough video tours, drone aerials, and video reels.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-5',  name: 'Brochure',                category: 'Document', active: true, is_system: true, description: 'Comprehensive PDF e-brochures and presentation decks.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-6',  name: 'Flyer',                   category: 'Document', active: true, is_system: true, description: 'Single-page digital flyers and print circulars.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-7',  name: 'Social Media Creative',   category: 'Media',    active: true, is_system: true, description: 'Square cards, Instagram story templates, and banners.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-8',  name: 'Campaign Message',        category: 'Text',     active: true, is_system: true, description: 'SMS, WhatsApp, and broadcast push message templates.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-9',  name: 'Call Script',             category: 'Script',   active: true, is_system: true, description: 'Telemarketing pitch talk-tracks and objection scripts.', created_at: '2026-01-01T00:00:00Z' },
+  { id: 'cfg-cnt-10', name: 'Other',                   category: 'Other',    active: true, is_system: true, description: 'Miscellaneous creative collateral and promotional files.', created_at: '2026-01-01T00:00:00Z' },
+]
+
+export function logMarketingConfigAudit(params: {
+  action: 'Created' | 'Updated' | 'Status Changed'
+  entityId: string
+  itemName: string
+  configType: string
+  summary: string
+  details?: Record<string, any>
+  user?: { id?: string; name?: string; role?: string }
+}): AuditLogRow {
+  const newLog: AuditLogRow = {
+    id: `AUD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    user_id: params.user?.id || 'u1',
+    user_name: params.user?.name || 'Aman Desai',
+    user_role: params.user?.role || 'SUPER_ADMIN',
+    action: params.action,
+    entity_type: 'Marketing Config',
+    entity_id: params.entityId,
+    summary: params.summary,
+    details: params.details || {},
+    ip_address: '192.168.1.10',
+  }
+  MOCK_AUDIT_LOGS.unshift(newLog)
+  return newLog
+}
 

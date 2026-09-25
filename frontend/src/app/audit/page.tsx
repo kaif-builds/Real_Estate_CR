@@ -70,6 +70,7 @@ function EntityTypeBadge({ type }: { type: AuditLogRow['entity_type'] }) {
     Opportunity: 'bg-amber-50 text-amber-700 border-amber-200',
     Transaction: 'bg-emerald-50 text-emerald-800 border-emerald-300',
     User: 'bg-purple-50 text-purple-700 border-purple-200',
+    'Marketing Config': 'bg-pink-50 text-pink-700 border-pink-200',
   }
 
   return (
@@ -101,6 +102,8 @@ function getEntityHref(type: AuditLogRow['entity_type']): string {
       return '/transactions'
     case 'User':
       return '/user-management'
+    case 'Marketing Config':
+      return '/marketing-settings'
     default:
       return '#'
   }
@@ -217,6 +220,7 @@ export default function AuditPage() {
                   <option value="Opportunity">Opportunity</option>
                   <option value="Transaction">Transaction</option>
                   <option value="User">User</option>
+                  <option value="Marketing Config">Marketing Config</option>
                 </Select>
               </div>
 
