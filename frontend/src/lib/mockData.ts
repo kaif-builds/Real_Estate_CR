@@ -2315,6 +2315,22 @@ export const MOCK_TRANSACTIONS: TransactionRow[] = [
 
 // ── Audit Log Types & Data ───────────────────────────────────────────────────
 
+export interface AiTrail {
+  original_request: string
+  interpreted_intent: string
+  proposed_values: Record<string, unknown>
+  user_edits: Record<string, unknown>
+  final_values: Record<string, unknown>
+  workflow_steps?: Array<{
+    action_type: string
+    status: string
+    record_id?: string
+    label?: string
+    proposed_values: Record<string, unknown>
+    final_values: Record<string, unknown>
+  }>
+}
+
 export interface AuditLogRow {
   id: string
   timestamp: string
@@ -2331,10 +2347,15 @@ export interface AuditLogRow {
     | 'User'
     | 'Transaction'
     | 'Marketing Config'
+    | 'Follow-up'
+    | 'Task'
+    | 'Campaign'
   entity_id: string
   summary: string
   details?: Record<string, any>
   ip_address?: string
+  ai_assisted?: boolean
+  ai_trail?: AiTrail
 }
 
 export const MOCK_AUDIT_LOGS: AuditLogRow[] = [
@@ -4303,7 +4324,7 @@ export function logMarketingConfigAudit(params: {
   return newLog
 }
 
-// ── AI Interaction Log ─────────────────────────────────────────────────────────
+// ── AI Interaction Log (session-level, for the chat sidebar) ──────────────────
 
 export interface AiInteractionLog {
   id: string
@@ -4318,6 +4339,7 @@ export interface AiInteractionLog {
   user_name?: string
 }
 
+/** @deprecated Session-only display array — the REAL audit trail is in MOCK_AUDIT_LOGS */
 export const MOCK_AI_INTERACTIONS: AiInteractionLog[] = []
 
 export function logAiInteraction(params: Omit<AiInteractionLog, 'id' | 'timestamp'>): AiInteractionLog {
@@ -4328,4 +4350,95 @@ export function logAiInteraction(params: Omit<AiInteractionLog, 'id' | 'timestam
   }
   MOCK_AI_INTERACTIONS.unshift(log)
   return log
+}
+
+// ── Unified AI Audit Logger (writes to MOCK_AUDIT_LOGS) ───────────────────────
+
+const INTENT_TO_ENTITY: Record<string, AuditLogRow['entity_type']> = {
+  create_lead: 'Lead',
+  create_followup: 'Follow-up',
+  schedule_visit: 'Visit',
+  create_requirement: 'Requirement',
+  create_opportunity: 'Opportunity',
+  update_deal_stage: 'Opportunity',
+  create_campaign: 'Campaign',
+  create_task: 'Task',
+}
+
+export function logAiAudit(params: {
+  action_type: string
+  entity_id: string
+  summary: string
+  user_id?: string
+  user_name?: string
+  user_role?: string
+  ai_trail: AiTrail
+  extra_details?: Record<string, any>
+}): AuditLogRow {
+  const entityType = INTENT_TO_ENTITY[params.action_type] || 'Lead'
+  const actionVerb: AuditLogRow['action'] = params.action_type === 'update_deal_stage' ? 'Status Changed' : 'Created'
+  const newLog: AuditLogRow = {
+    id: `AUD-AI-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    user_id: params.user_id || 'u1',
+    user_name: params.user_name || 'Aman Desai',
+    user_role: params.user_role || 'SUPER_ADMIN',
+    action: actionVerb,
+    entity_type: entityType,
+    entity_id: params.entity_id,
+    summary: `[AI-assisted] ${params.summary} (via AI Assistant)`,
+    details: params.extra_details || {},
+    ip_address: '192.168.1.10',
+    ai_assisted: true,
+    ai_trail: params.ai_trail,
+  }
+  MOCK_AUDIT_LOGS.unshift(newLog)
+  return newLog
+}
+
+export function logAiWorkflowAudit(params: {
+  workflow_request: string
+  steps: Array<{
+    action_type: string
+    status: string
+    record_id?: string
+    label?: string
+    proposed_values: Record<string, unknown>
+    final_values: Record<string, unknown>
+  }>
+  user_id?: string
+  user_name?: string
+  user_role?: string
+}): AuditLogRow[] {
+  const logs: AuditLogRow[] = []
+  for (const step of params.steps) {
+    if (step.status !== 'success') continue
+    const entityType = INTENT_TO_ENTITY[step.action_type] || 'Lead'
+    const actionVerb: AuditLogRow['action'] = step.action_type === 'update_deal_stage' ? 'Status Changed' : 'Created'
+    const newLog: AuditLogRow = {
+      id: `AUD-WF-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      user_id: params.user_id || 'u1',
+      user_name: params.user_name || 'Aman Desai',
+      user_role: params.user_role || 'SUPER_ADMIN',
+      action: actionVerb,
+      entity_type: entityType,
+      entity_id: step.record_id || 'unknown',
+      summary: `[AI-assisted] ${step.label || step.action_type} (via AI Workflow)`,
+      details: { workflow_request: params.workflow_request, step_count: params.steps.length },
+      ip_address: '192.168.1.10',
+      ai_assisted: true,
+      ai_trail: {
+        original_request: params.workflow_request,
+        interpreted_intent: 'workflow',
+        proposed_values: step.proposed_values,
+        user_edits: {},
+        final_values: step.final_values,
+        workflow_steps: params.steps,
+      },
+    }
+    MOCK_AUDIT_LOGS.unshift(newLog)
+    logs.push(newLog)
+  }
+  return logs
 }

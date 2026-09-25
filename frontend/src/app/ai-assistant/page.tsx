@@ -27,7 +27,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  logAiInteraction,
+  logAiInteraction, logAiAudit, logAiWorkflowAudit,
   MOCK_LEADS, MOCK_FOLLOW_UPS, MOCK_VISITS, MOCK_REQUIREMENTS,
   MOCK_PIPELINE_OPPORTUNITIES, MOCK_TASKS, MOCK_CAMPAIGNS, MOCK_MATCHES,
   MOCK_PARTIES, MOCK_USERS, MOCK_PROPERTIES,
@@ -772,6 +772,8 @@ Every action shows a **Proposed card** you can edit, exclude, or approve. What c
       if (result.extra) confirmText += `\n\n\ud83d\udd0d **Matching results:** ${result.extra}`
       const log = logAiInteraction({ user_message: msg.proposal.original_request, interpreted_intent: msg.proposal.action_type, entity_queried: msg.proposal.action_type, filters_applied: finalFields, record_count: 1, ai_response: result.label, user_id: user?.id, user_name: user?.name })
       setSessionLogs(s => [log, ...s])
+      // Write to unified audit trail
+      logAiAudit({ action_type: msg.proposal.action_type, entity_id: result.id, summary: result.label, user_id: user?.id, user_name: user?.name, user_role: user?.role, ai_trail: { original_request: msg.proposal.original_request, interpreted_intent: msg.proposal.action_type, proposed_values: { ...msg.proposal.proposed_values }, user_edits: userEdits, final_values: finalFields } })
       const meta = ACTION_META[msg.proposal!.action_type]
       const updated = prev.map(m => m.id === msgId ? { ...m, proposal: { ...m.proposal!, status: 'approved' as const, final_values: finalFields, user_edits: userEdits, created_record_id: result.id } } : m)
       setPendingType(null); setPendingFields({}); setCurrentDupes([])
@@ -841,6 +843,12 @@ Every action shows a **Proposed card** you can edit, exclude, or approve. What c
         user_id: user?.id, user_name: user?.name,
       })
       setSessionLogs(s => [log, ...s])
+      // Write each successful step to unified audit trail
+      logAiWorkflowAudit({
+        workflow_request: msg.workflow!.original_request,
+        steps: stepResults.map((s, i) => ({ action_type: s.action_type, status: s.status, record_id: s.record_id, label: s.label, proposed_values: { ...finalSteps[i].proposed_values }, final_values: { ...finalSteps[i].fields } })),
+        user_id: user?.id, user_name: user?.name, user_role: user?.role,
+      })
 
       let confirmText = allSucceeded
         ? `\u2705 Workflow completed! All ${successCount} step${successCount!==1?'s':''} executed successfully.`

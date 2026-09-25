@@ -2,8 +2,8 @@
 
 /**
  * System Audit Log Module — Module 17 (Super Admin Only)
- * Read-only immutable security audit trail capturing changes to properties,
- * requirements, leads, visits, deals, users, and transactions.
+ * Unified audit trail capturing all system state mutations,
+ * including AI-assisted actions with full 3-state trail.
  */
 
 import React, { useState, useMemo } from 'react'
@@ -12,7 +12,7 @@ import {
   Shield, Search, Filter, Calendar, Clock, User, Eye,
   Building2, ClipboardList, Users, MapPin, TrendingUp,
   Receipt, UserCheck, X, FileText, CheckCircle2, AlertTriangle,
-  ArrowRight, ExternalLink
+  ArrowRight, ExternalLink, Bot, Sparkles, ChevronRight,
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -24,6 +24,7 @@ import {
   MOCK_AUDIT_LOGS,
   MOCK_USERS,
   type AuditLogRow,
+  type AiTrail,
 } from '@/lib/mockData'
 
 // ── Action Badge ──────────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ function ActionBadge({ action }: { action: AuditLogRow['action'] }) {
 // ── Entity Type Badge ─────────────────────────────────────────────────────────
 
 function EntityTypeBadge({ type }: { type: AuditLogRow['entity_type'] }) {
-  const styles: Record<AuditLogRow['entity_type'], string> = {
+  const styles: Record<string, string> = {
     Property: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     Requirement: 'bg-teal-50 text-teal-700 border-teal-200',
     Lead: 'bg-cyan-50 text-cyan-700 border-cyan-200',
@@ -71,6 +72,9 @@ function EntityTypeBadge({ type }: { type: AuditLogRow['entity_type'] }) {
     Transaction: 'bg-emerald-50 text-emerald-800 border-emerald-300',
     User: 'bg-purple-50 text-purple-700 border-purple-200',
     'Marketing Config': 'bg-pink-50 text-pink-700 border-pink-200',
+    'Follow-up': 'bg-orange-50 text-orange-700 border-orange-200',
+    Task: 'bg-slate-50 text-slate-700 border-slate-300',
+    Campaign: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
   }
 
   return (
@@ -104,10 +108,133 @@ function getEntityHref(type: AuditLogRow['entity_type']): string {
       return '/user-management'
     case 'Marketing Config':
       return '/marketing-settings'
+    case 'Follow-up':
+      return '/follow-ups'
+    case 'Task':
+      return '/tasks'
+    case 'Campaign':
+      return '/campaigns'
     default:
       return '#'
   }
 }
+
+// ── AI Trail Detail Component ─────────────────────────────────────────────────
+
+function AiTrailDetail({ trail }: { trail: AiTrail }) {
+  const hasEdits = Object.keys(trail.user_edits).length > 0
+  const isWorkflow = trail.workflow_steps && trail.workflow_steps.length > 0
+
+  return (
+    <div className="space-y-4">
+      {/* Banner */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+        <Bot size={16} className="text-amber-600 shrink-0" />
+        <div>
+          <p className="text-xs font-semibold text-amber-800">AI-Assisted Action</p>
+          <p className="text-[11px] text-amber-600">This action was performed via the AI Assistant with human approval</p>
+        </div>
+      </div>
+
+      {/* Step 1: Original Request */}
+      <div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center">1</div>
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Original User Request</span>
+        </div>
+        <div className="ml-7 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-900 italic">
+          {'\u201c'}{trail.original_request}{'\u201d'}
+        </div>
+      </div>
+
+      {/* Step 2: AI Proposed Values */}
+      <div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center">2</div>
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">AI Proposed Values</span>
+          <span className="text-[10px] text-slate-400">(intent: {trail.interpreted_intent})</span>
+        </div>
+        <div className="ml-7">
+          <div className="grid grid-cols-2 gap-1 bg-slate-50 border border-slate-200 rounded-lg p-2">
+            {Object.entries(trail.proposed_values).filter(([, v]) => v != null && v !== '').map(([k, v]) => (
+              <div key={k} className="flex items-baseline gap-1 text-xs py-0.5">
+                <span className="text-slate-500 font-medium">{k}:</span>
+                <span className="text-slate-800">{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Step 3: User Edits */}
+      <div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className={`w-5 h-5 rounded-full ${hasEdits ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'} text-[10px] font-bold flex items-center justify-center`}>3</div>
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">User Edits</span>
+          {!hasEdits && <span className="text-[10px] text-emerald-600 font-medium">No changes made</span>}
+        </div>
+        {hasEdits ? (
+          <div className="ml-7 space-y-1">
+            {Object.entries(trail.user_edits).filter(([, v]) => v != null).map(([k, v]) => {
+              const oldVal = trail.proposed_values[k]
+              return (
+                <div key={k} className="flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  <span className="text-slate-600 font-medium">{k}:</span>
+                  <span className="text-red-500 line-through">{String(oldVal ?? '(empty)')}</span>
+                  <ArrowRight size={10} className="text-slate-400" />
+                  <span className="text-emerald-700 font-semibold">{String(v)}</span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="ml-7 text-xs text-slate-400 italic">User approved with no modifications</p>
+        )}
+      </div>
+
+      {/* Step 4: Final Committed Values */}
+      <div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center">4</div>
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Final Committed Values</span>
+          <CheckCircle2 size={12} className="text-emerald-500" />
+        </div>
+        <div className="ml-7">
+          <div className="grid grid-cols-2 gap-1 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+            {Object.entries(trail.final_values).filter(([, v]) => v != null && v !== '').map(([k, v]) => (
+              <div key={k} className="flex items-baseline gap-1 text-xs py-0.5">
+                <span className="text-emerald-600 font-medium">{k}:</span>
+                <span className="text-emerald-900 font-semibold">{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Workflow Steps (if part of a workflow) */}
+      {isWorkflow && (
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <Sparkles size={14} className="text-indigo-500" />
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Workflow Steps ({trail.workflow_steps!.length})</span>
+          </div>
+          <div className="ml-5 space-y-1">
+            {trail.workflow_steps!.map((ws, i) => (
+              <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded border ${ws.status === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : ws.status === 'failed' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                <span className="font-bold">{i + 1}.</span>
+                <span className="font-medium">{ws.action_type}</span>
+                {ws.record_id && <span className="font-mono text-[10px]">{ws.record_id}</span>}
+                <span className={`ml-auto text-[10px] font-semibold uppercase ${ws.status === 'success' ? 'text-emerald-600' : ws.status === 'failed' ? 'text-red-600' : 'text-slate-400'}`}>{ws.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AuditPage() {
   const [logs] = useState<AuditLogRow[]>([...MOCK_AUDIT_LOGS])
@@ -119,11 +246,12 @@ export default function AuditPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [aiFilter, setAiFilter] = useState('ALL') // 'ALL' | 'YES' | 'NO'
 
   // ── Filtered Logs ───────────────────────────────────────────────────────────
 
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
+    return MOCK_AUDIT_LOGS.filter((log) => {
       // Entity type filter
       if (entityFilter !== 'ALL' && log.entity_type !== entityFilter) {
         return false
@@ -132,6 +260,9 @@ export default function AuditPage() {
       if (userFilter !== 'ALL' && log.user_name !== userFilter) {
         return false
       }
+      // AI-Assisted filter
+      if (aiFilter === 'YES' && !log.ai_assisted) return false
+      if (aiFilter === 'NO' && log.ai_assisted) return false
       // Date range filter
       if (dateFrom && log.timestamp.slice(0, 10) < dateFrom) {
         return false
@@ -152,14 +283,17 @@ export default function AuditPage() {
       }
       return true
     })
-  }, [logs, entityFilter, userFilter, dateFrom, dateTo, searchQuery])
+  }, [entityFilter, userFilter, dateFrom, dateTo, searchQuery, aiFilter])
 
   // Unique Users in Audit
   const auditUsers = useMemo(() => {
     const names = new Set<string>()
-    logs.forEach((l) => names.add(l.user_name))
+    MOCK_AUDIT_LOGS.forEach((l) => names.add(l.user_name))
     return Array.from(names)
-  }, [logs])
+  }, [])
+
+  // Stats
+  const aiCount = useMemo(() => MOCK_AUDIT_LOGS.filter(l => l.ai_assisted).length, [])
 
   const handleResetFilters = () => {
     setEntityFilter('ALL')
@@ -167,6 +301,7 @@ export default function AuditPage() {
     setDateFrom('')
     setDateTo('')
     setSearchQuery('')
+    setAiFilter('ALL')
   }
 
   return (
@@ -183,9 +318,14 @@ export default function AuditPage() {
               <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-xs">
                 Super Admin Only
               </Badge>
+              {aiCount > 0 && (
+                <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs gap-1">
+                  <Bot size={10} />{aiCount} AI-Assisted
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-slate-500 mt-1">
-              Read-only chronological audit trail capturing all system state mutations, access, and status changes.
+              Unified audit trail — human and AI-assisted actions in one view.
             </p>
           </div>
         </div>
@@ -193,7 +333,7 @@ export default function AuditPage() {
         {/* Filter Bar */}
         <Card className="border-slate-200 shadow-sm bg-white">
           <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -221,6 +361,9 @@ export default function AuditPage() {
                   <option value="Transaction">Transaction</option>
                   <option value="User">User</option>
                   <option value="Marketing Config">Marketing Config</option>
+                  <option value="Follow-up">Follow-up</option>
+                  <option value="Task">Task</option>
+                  <option value="Campaign">Campaign</option>
                 </Select>
               </div>
 
@@ -237,6 +380,19 @@ export default function AuditPage() {
                       {u}
                     </option>
                   ))}
+                </Select>
+              </div>
+
+              {/* AI-Assisted Filter */}
+              <div>
+                <Select
+                  value={aiFilter}
+                  onChange={(e) => setAiFilter(e.target.value)}
+                  className="h-9 text-sm"
+                >
+                  <option value="ALL">All Sources</option>
+                  <option value="YES">AI-Assisted Only</option>
+                  <option value="NO">Manual Only</option>
                 </Select>
               </div>
 
@@ -264,9 +420,13 @@ export default function AuditPage() {
             </div>
 
             {/* Active filters reset */}
-            {(entityFilter !== 'ALL' || userFilter !== 'ALL' || dateFrom || dateTo || searchQuery) && (
+            {(entityFilter !== 'ALL' || userFilter !== 'ALL' || dateFrom || dateTo || searchQuery || aiFilter !== 'ALL') && (
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-600">
-                <span>Showing filtered audit events</span>
+                <span>
+                  Showing filtered audit events
+                  {aiFilter === 'YES' && <span className="ml-1 text-amber-600 font-semibold">(AI-assisted only)</span>}
+                  {aiFilter === 'NO' && <span className="ml-1 text-slate-500 font-semibold">(manual only)</span>}
+                </span>
                 <button
                   onClick={handleResetFilters}
                   className="text-indigo-600 hover:text-indigo-800 font-medium underline"
@@ -310,7 +470,7 @@ export default function AuditPage() {
                   filteredLogs.map((log) => (
                     <tr
                       key={log.id}
-                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                      className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${log.ai_assisted ? 'bg-amber-50/30' : ''}`}
                       onClick={() => setSelectedLog(log)}
                     >
                       {/* Timestamp */}
@@ -343,7 +503,14 @@ export default function AuditPage() {
 
                       {/* Action */}
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <ActionBadge action={log.action} />
+                        <div className="flex items-center gap-1.5">
+                          <ActionBadge action={log.action} />
+                          {log.ai_assisted && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                              <Bot size={9} />AI
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Entity Type */}
@@ -389,13 +556,18 @@ export default function AuditPage() {
         {/* Audit Detail Modal */}
         {selectedLog && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="bg-white rounded-lg shadow-xl border border-slate-200 max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95">
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
                 <div className="flex items-center gap-2">
                   <Shield className="text-slate-700" size={18} />
                   <h2 className="text-base font-bold text-slate-900">
                     Audit Event — {selectedLog.id}
                   </h2>
+                  {selectedLog.ai_assisted && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                      <Bot size={11} />AI-Assisted
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => setSelectedLog(null)}
@@ -440,6 +612,17 @@ export default function AuditPage() {
                     </span>
                   </div>
 
+                  <div className="flex justify-between py-1.5 border-b border-slate-100">
+                    <span className="text-slate-500 text-xs">Source</span>
+                    <span className="text-xs font-medium">
+                      {selectedLog.ai_assisted ? (
+                        <span className="text-amber-700 flex items-center gap-1"><Bot size={11} />AI Assistant</span>
+                      ) : (
+                        <span className="text-slate-700">Manual</span>
+                      )}
+                    </span>
+                  </div>
+
                   {selectedLog.ip_address && (
                     <div className="flex justify-between py-1.5 border-b border-slate-100">
                       <span className="text-slate-500 text-xs">Origin IP</span>
@@ -449,8 +632,15 @@ export default function AuditPage() {
                     </div>
                   )}
 
-                  {/* Metadata / Details Payload */}
-                  {selectedLog.details && (
+                  {/* AI Trail — the 3-state detail (only for AI-assisted entries) */}
+                  {selectedLog.ai_assisted && selectedLog.ai_trail && (
+                    <div className="pt-3">
+                      <AiTrailDetail trail={selectedLog.ai_trail} />
+                    </div>
+                  )}
+
+                  {/* Standard Metadata / Details Payload (for non-AI entries or as supplement) */}
+                  {selectedLog.details && Object.keys(selectedLog.details).length > 0 && !selectedLog.ai_trail && (
                     <div className="pt-2">
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">
                         Change Payload & Metadata
