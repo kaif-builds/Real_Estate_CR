@@ -13,7 +13,7 @@ import {
   Settings, Shield, AlertTriangle, FileBarChart,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft,
   Mic, Megaphone, Share2, PhoneCall, GitFork, Handshake,
-  FolderOpen, FileSpreadsheet,
+  FolderOpen, FileSpreadsheet, Bot,
 } from 'lucide-react'
 
 // ── Nav item definitions ──────────────────────────────────────────────────────
@@ -115,7 +115,12 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-// ── Sidebar component ─────────────────────────────────────────────────────────
+// ── Standalone items (not in any group) ──────────────────────────────────────
+// These are rendered as a pinned section separate from the grouped nav.
+
+const NAV_STANDALONE: NavItem[] = [
+  { label: 'AI Assistant', href: '/ai-assistant', icon: Bot, roles: ['SUPER_ADMIN', 'OFFICE_EXECUTIVE', 'AGENT'] },
+]
 
 export function Sidebar() {
   const { user } = useAuth()
@@ -219,6 +224,37 @@ export function Sidebar() {
           )
         })}
       </nav>
+
+      {/* AI Assistant — standalone item (not in a group) */}
+      {(() => {
+        const standaloneItems = NAV_STANDALONE.filter(i => i.roles.includes(currentUser.role))
+        if (standaloneItems.length === 0) return null
+        return (
+          <div className="border-t border-slate-700/50 py-2">
+            {standaloneItems.map(item => {
+              const Icon = item.icon
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2 text-sm transition-colors',
+                    isActive
+                      ? 'bg-amber-500/20 text-amber-400 border-r-2 border-amber-400'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white',
+                    collapsed && 'justify-center px-0'
+                  )}
+                >
+                  <Icon size={18} className="shrink-0" />
+                  {!collapsed && <span className="truncate">{item.label}</span>}
+                </Link>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Role indicator at bottom */}
       {!collapsed && (

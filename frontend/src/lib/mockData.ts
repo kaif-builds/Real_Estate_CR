@@ -4303,3 +4303,29 @@ export function logMarketingConfigAudit(params: {
   return newLog
 }
 
+// ── AI Interaction Log ─────────────────────────────────────────────────────────
+
+export interface AiInteractionLog {
+  id: string
+  timestamp: string
+  user_message: string
+  interpreted_intent: string
+  entity_queried: string
+  filters_applied: Record<string, unknown>
+  record_count: number
+  ai_response: string
+  user_id?: string
+  user_name?: string
+}
+
+export const MOCK_AI_INTERACTIONS: AiInteractionLog[] = []
+
+export function logAiInteraction(params: Omit<AiInteractionLog, 'id' | 'timestamp'>): AiInteractionLog {
+  const log: AiInteractionLog = {
+    id: `AI-${Date.now()}-${Math.floor(Math.random() * 9000) + 1000}`,
+    timestamp: new Date().toISOString(),
+    ...params,
+  }
+  MOCK_AI_INTERACTIONS.unshift(log)
+  return log
+}
