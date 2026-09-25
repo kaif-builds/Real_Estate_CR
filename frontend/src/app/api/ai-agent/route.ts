@@ -12,12 +12,21 @@ export type WriteIntent =
   | 'create_campaign'
   | 'create_task'
 
+export interface WorkflowStep {
+  action_type: WriteIntent
+  extracted_fields: Record<string, string | null>
+  depends_on: number | null          // index of the step this depends on (0-based)
+  dependency_description: string | null  // e.g. "Uses the Lead ID from Step 1"
+}
+
 export interface AIAgentIntent {
-  intent: 'query_data' | WriteIntent | 'clarify' | 'unsupported'
+  intent: 'query_data' | WriteIntent | 'workflow' | 'clarify' | 'unsupported'
   entity: string
   filters: Record<string, string | string[] | boolean | null>
   extracted_fields?: Record<string, string | null>
   missing_required_fields?: string[]
+  // Workflow support
+  workflow_steps?: WorkflowStep[]
   summary_requested?: boolean
   clarification_needed?: string | null
   reasoning?: string
@@ -39,6 +48,10 @@ export interface AIAgentResponse {
   action_proposal?: {
     action_type: WriteIntent
     fields: Record<string, string | null>
+    ready: true
+  } | null
+  workflow_proposal?: {
+    steps: WorkflowStep[]
     ready: true
   } | null
 }
@@ -100,50 +113,56 @@ const ACTION_VERB: Record<WriteIntent, string> = {
   create_task: 'create this task',
 }
 
-// ── Data Schema (fields only — no actual data rows sent to LLM) ───────────────
+// ── Data Schema ───────────────────────────────────────────────────────────────
 
 const DATA_SCHEMA = `
 You are the AI assistant embedded in "PropDesk CRM" — a real estate CRM for an agency in Indore, India.
 You have READ access to all CRM data, and WRITE access to exactly 8 actions:
-  1. create_lead — Create a new Lead record
-  2. create_followup — Create a new Follow-up record
-  3. schedule_visit — Schedule a new Property Visit
-  4. create_requirement — Create a new Client Requirement (property search criteria)
-  5. create_opportunity — Create a new Pipeline Opportunity
-  6. update_deal_stage — Move an existing Opportunity to a new pipeline stage
-  7. create_campaign — Create a new Marketing Campaign
-  8. create_task — Create a new Task
+  1. create_lead  2. create_followup  3. schedule_visit
+  4. create_requirement  5. create_opportunity  6. update_deal_stage
+  7. create_campaign  8. create_task
 
 IMPORTANT RULES:
 - You MUST NOT make up numbers, names, phone numbers, or any data.
-- If the user's intent is ambiguous, set intent="clarify" and explain what clarification is needed.
-- For write intents: extract ONLY fields the user explicitly stated. Mark missing required fields clearly.
+- If the user's intent is ambiguous, set intent="clarify".
+- For write intents: extract ONLY fields the user explicitly stated.
 - DISAMBIGUATION: "create a follow-up for this opportunity" = create_followup (not create_opportunity).
-  "move opportunity to negotiation" = update_deal_stage. "add a requirement for a buyer" = create_requirement.
-- You respond ONLY with a valid JSON object matching the schema below.
+
+## MULTI-STEP WORKFLOWS
+When a user requests MULTIPLE actions in one message (e.g. "Create a lead for X and schedule a follow-up for Friday"):
+- Set intent="workflow"
+- Return workflow_steps: an array of step objects in execution order
+- Each step has: action_type, extracted_fields, depends_on (0-based index of prior step, or null), dependency_description
+- Common patterns:
+  * "Create lead + follow-up" → Step 0: create_lead, Step 1: create_followup (depends_on: 0, the follow-up uses the new lead's client_name and ID)
+  * "Create lead + schedule visit" → Step 0: create_lead, Step 1: schedule_visit (depends_on: 0)
+  * "Create opportunity + schedule visit" → Step 0: create_opportunity, Step 1: schedule_visit (depends_on: 0, uses the opportunity's property and client)
+  * "Create requirement + task" → Step 0: create_requirement, Step 1: create_task (depends_on: 0)
+- For dependent steps: set known fields from context (e.g. client_name from the first step's party_name), leave fields that need the runtime ID as null (they'll be filled from the prior step's result at execution time)
+- If a single action is requested, use the normal single-action intent format (not workflow)
 
 ## CRM Entities and Fields (for read queries)
 
 ### leads
-Fields: id, party_name, lead_type (BUYER|SELLER|TENANT|LANDLORD|INVESTOR|CONSULTANT), status (NEW|CONTACTED|QUALIFIED|LOST|ACTIVE|CONVERTED), priority (LOW|MEDIUM|HIGH|CRITICAL), channel_type (Digital|Offline), source, assigned_to_name, value, created_at
+Fields: id, party_name, lead_type (BUYER|SELLER|TENANT|LANDLORD|INVESTOR|CONSULTANT), status (NEW|CONTACTED|QUALIFIED|LOST|ACTIVE|CONVERTED), priority, channel_type, source, assigned_to_name, value, created_at
 
 ### properties
-Fields: id, category (RENTAL_RESIDENTIAL|RENTAL_COMMERCIAL|BUY_SELL_FLAT|BUY_SELL_COMMERCIAL|PLOT), short_loc (01-Schm140_Mayank, 07-Geeta_Bhawan, 05-MG_Road, 04-Vijay_Nagar, 08-SAPNA_SANGEETA, 09-Super_Corridor), price, status (AVAILABLE|NEW|UNDER_NEGOTIATION|ON_HOLD|RENTED|SOLD), owner_name
+Fields: id, category (RENTAL_RESIDENTIAL|RENTAL_COMMERCIAL|BUY_SELL_FLAT|BUY_SELL_COMMERCIAL|PLOT), short_loc (01-Schm140_Mayank, 07-Geeta_Bhawan, 05-MG_Road, 04-Vijay_Nagar, 08-SAPNA_SANGEETA, 09-Super_Corridor), price, status, owner_name
 
 ### follow_ups
-Fields: id, client_name, entity_type, entity_id, purpose, priority (LOW|MEDIUM|HIGH), due_date, status (PENDING|COMPLETED|OVERDUE|RESCHEDULED|CANCELLED|NO_RESPONSE), responsible_name
+Fields: id, client_name, entity_type, entity_id, purpose, priority, due_date, status, responsible_name
 
 ### opportunities
-Fields: id, client_name, property_short_loc, stage (QUALIFIED|PROPERTY_SHARED|SITE_VISIT|NEGOTIATION|DOCUMENTATION|WON|LOST), expected_value, probability, agent_name
+Fields: id, client_name, property_short_loc, stage, expected_value, probability, agent_name
 
 ### requirements
 Fields: id, client_name, category, intent (BUY|RENT|LEASE), preferred_short_locs, min_budget, max_budget, status, assigned_to_name
 
 ### tasks
-Fields: id, title, assigned_to_name, priority (LOW|MEDIUM|HIGH|CRITICAL), status (TODO|IN_PROGRESS|DONE|OVERDUE), due_date, task_type (Internal|Verification|Documentation|Admin|Other)
+Fields: id, title, assigned_to_name, priority, status, due_date, task_type
 
 ### campaigns
-Fields: id, name, type (Property Promotion|Buyer Acquisition|Seller Acquisition|Tenant Acquisition|Landlord Acquisition|Investor Acquisition|Brand Awareness|Lead Generation), status, owner_name, start_date, end_date, planned_budget
+Fields: id, name, type, status, owner_name, start_date, end_date, planned_budget
 
 ### parties
 Fields: id, name, email, mobile, city, roles, status
@@ -159,44 +178,43 @@ Fields: id, name, target_audience, purpose, status, geography
 
 ### schedule_visit — Required: client_name, property_short_loc, agent_name, scheduled_date | Optional: purpose, instructions
 
-### create_requirement — Required: client_name, category, intent | Optional: preferred_short_locs (comma-separated location codes), min_budget, max_budget, timeline, assigned_to_name, remarks
-- client_name: must match existing party if possible
-- category: RENTAL_RESIDENTIAL | RENTAL_COMMERCIAL | BUY_SELL_FLAT | BUY_SELL_COMMERCIAL | PLOT
-- intent: BUY | RENT | LEASE
-- preferred_short_locs: comma-separated from 01-Schm140_Mayank, 07-Geeta_Bhawan, 05-MG_Road, 04-Vijay_Nagar, 08-SAPNA_SANGEETA, 09-Super_Corridor
-- min_budget/max_budget: number in rupees
+### create_requirement — Required: client_name, category, intent | Optional: preferred_short_locs, min_budget, max_budget, timeline, assigned_to_name, remarks
 
-### create_opportunity — Required: property_short_loc, client_name, expected_value | Optional: agent_name (default Ravi Mehta), stage (default QUALIFIED), probability
-- stage: QUALIFIED | PROPERTY_SHARED | SITE_VISIT | NEGOTIATION | DOCUMENTATION | WON | LOST
+### create_opportunity — Required: property_short_loc, client_name, expected_value | Optional: agent_name, stage, probability
 
-### update_deal_stage — Required: opportunity_id, new_stage | Optional: none
-- If user says "move Vikram's deal to negotiation", try to identify the opportunity by client_name + property. If multiple match, set intent="clarify" and list the candidates.
-- opportunity_id: OPP-XXXX format
-- new_stage: QUALIFIED | PROPERTY_SHARED | SITE_VISIT | NEGOTIATION | DOCUMENTATION | WON | LOST
+### update_deal_stage — Required: opportunity_id, new_stage
 
-### create_campaign — Required: campaign_name, type, start_date | Optional: end_date, owner_name, target_audience (comma-separated), geography, planned_budget, target_leads, objective
-- type: Property Promotion | Buyer Acquisition | Seller Acquisition | Tenant Acquisition | Landlord Acquisition | Investor Acquisition | Brand Awareness | Lead Generation
-- start_date/end_date: YYYY-MM-DD
+### create_campaign — Required: campaign_name, type, start_date | Optional: end_date, owner_name, planned_budget, objective
 
 ### create_task — Required: title, assigned_to_name, due_date | Optional: task_type, priority, description, linked_record
-- task_type: Internal | Verification | Documentation | Admin | Other (default: Internal)
-- priority: LOW | MEDIUM | HIGH | CRITICAL (default: MEDIUM)
-- due_date: YYYY-MM-DDTHH:mm (infer from natural language, today is 2026-09-26)
-- linked_record: format "Type:ID" e.g. "Lead:L-1001" or "Property:P-1003"
 
-Staff members: Aman Desai (Super Admin), Neha Kapoor (Office Executive), Ravi Mehta (Agent), Priya Sharma (Agent), Amit Patel (Agent), Sanjay Verma (Agent)
+Staff: Aman Desai (Super Admin), Neha Kapoor (Office Executive), Ravi Mehta (Agent), Priya Sharma (Agent), Amit Patel (Agent), Sanjay Verma (Agent)
+Today's date: 2026-09-26
 
-## Your Response Format
-Return EXACTLY this JSON (no markdown, no code fences):
+## Response Format
+Return EXACTLY this JSON (no markdown fences):
+
+For single action:
 {
-  "intent": "query_data" | "create_lead" | "create_followup" | "schedule_visit" | "create_requirement" | "create_opportunity" | "update_deal_stage" | "create_campaign" | "create_task" | "clarify" | "unsupported",
-  "entity": "leads" | "properties" | "follow_ups" | "opportunities" | "requirements" | "tasks" | "campaigns" | "parties" | "telemarketing" | "general",
+  "intent": "<one of the 8 write intents or query_data/clarify/unsupported>",
+  "entity": "...",
   "filters": {},
   "extracted_fields": {},
   "missing_required_fields": [],
-  "summary_requested": false,
   "clarification_needed": null,
-  "reasoning": "brief explanation"
+  "reasoning": "..."
+}
+
+For multi-step workflow:
+{
+  "intent": "workflow",
+  "entity": "general",
+  "filters": {},
+  "workflow_steps": [
+    { "action_type": "create_lead", "extracted_fields": {"party_name": "X", "phone": "123", "lead_type": "BUYER", "assigned_to_name": "Priya Sharma"}, "depends_on": null, "dependency_description": null },
+    { "action_type": "create_followup", "extracted_fields": {"client_name": "X", "purpose": "Initial follow-up", "due_date": "2026-09-28T10:00", "responsible_name": "Priya Sharma"}, "depends_on": 0, "dependency_description": "Links to the Lead created in Step 1" }
+  ],
+  "reasoning": "User wants to create a lead AND schedule a follow-up linked to it"
 }
 `
 
@@ -209,7 +227,6 @@ async function queryMockData(intent: AIAgentIntent): Promise<{ results: unknown[
   } = await import('@/lib/mockData')
 
   const filters = intent.filters || {}
-
   const matchString = (val: string | undefined | null, filter: unknown): boolean => {
     if (!filter) return true
     if (!val) return false
@@ -282,21 +299,14 @@ async function queryMockData(intent: AIAgentIntent): Promise<{ results: unknown[
       return { results: results.map(c => ({ id: c.id, name: c.name, type: c.type, status: c.status, owner: c.owner_name, period: `${c.start_date} to ${c.end_date}`, budget: c.planned_budget })), entity_label: 'Campaigns' }
     }
     case 'parties': {
-      const results = MOCK_PARTIES.filter(p => {
-        if (filters.status && !matchString(p.status, filters.status)) return false
-        return true
-      })
+      const results = MOCK_PARTIES.filter(p => { if (filters.status && !matchString(p.status, filters.status)) return false; return true })
       return { results: results.map(p => ({ id: p.id, name: p.name, email: p.email, mobile: p.mobile, city: p.city, roles: p.roles.join(', '), status: p.status })), entity_label: 'Parties / Contacts' }
     }
     case 'telemarketing': {
-      const results = MOCK_TELEMARKETING_CAMPAIGNS.filter(t => {
-        if (filters.status && !matchString(t.status, filters.status)) return false
-        return true
-      })
+      const results = MOCK_TELEMARKETING_CAMPAIGNS.filter(t => { if (filters.status && !matchString(t.status, filters.status)) return false; return true })
       return { results: results.map(t => ({ id: t.id, name: t.name, purpose: t.purpose, status: t.status, target_audience: t.target_audience, geography: t.geography })), entity_label: 'Telemarketing Campaigns' }
     }
-    default:
-      return { results: [], entity_label: 'Data' }
+    default: return { results: [], entity_label: 'Data' }
   }
 }
 
@@ -305,16 +315,11 @@ async function queryMockData(intent: AIAgentIntent): Promise<{ results: unknown[
 export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'GROQ_API_KEY is not configured.' }, { status: 500 })
-    }
+    if (!apiKey) return NextResponse.json({ error: 'GROQ_API_KEY is not configured.' }, { status: 500 })
 
     const body: AIAgentRequest = await req.json()
     const { message, conversation_history = [], pending_action_type, pending_action_fields } = body
-
-    if (!message?.trim()) {
-      return NextResponse.json({ error: 'Message is required' }, { status: 400 })
-    }
+    if (!message?.trim()) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
 
     // ── Step 1: Parse intent ───────────────────────────────────────────────────
 
@@ -324,26 +329,18 @@ export async function POST(req: NextRequest) {
         .filter(([, v]) => v != null && v !== '')
         .map(([k, v]) => `  ${k}: ${v}`)
         .join('\n')
-      systemPrompt += `\n\n## CURRENT CONTEXT: Collecting fields for ${pending_action_type}
-Already collected:\n${filledFields || '  (none yet)'}
-The user is providing additional information. Extract new field values and merge.`
+      systemPrompt += `\n\n## CURRENT CONTEXT: Collecting fields for ${pending_action_type}\nAlready collected:\n${filledFields || '  (none yet)'}\nThe user is providing additional information. Extract new field values and merge.`
     }
-
-    const intentMessages = [
-      { role: 'system' as const, content: systemPrompt },
-      ...conversation_history.slice(-8),
-      { role: 'user' as const, content: message },
-    ]
 
     const intentRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
-        messages: intentMessages,
+        messages: [{ role: 'system', content: systemPrompt }, ...conversation_history.slice(-8), { role: 'user', content: message }],
         response_format: { type: 'json_object' },
         temperature: 0.1,
-        max_tokens: 768,
+        max_tokens: 1024,
       }),
     })
 
@@ -352,44 +349,78 @@ The user is providing additional information. Extract new field values and merge
       return NextResponse.json({ error: `AI service error (${intentRes.status}).` }, { status: 502 })
     }
 
-    const intentData = await intentRes.json()
-    const intentRaw = intentData.choices?.[0]?.message?.content || '{}'
-
+    const intentRaw = (await intentRes.json()).choices?.[0]?.message?.content || '{}'
     let intent: AIAgentIntent
-    try {
-      intent = JSON.parse(intentRaw.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim())
-    } catch {
-      intent = { intent: 'clarify', entity: 'general', filters: {}, clarification_needed: 'I had trouble understanding. Could you rephrase?' }
+    try { intent = JSON.parse(intentRaw.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim()) }
+    catch { intent = { intent: 'clarify', entity: 'general', filters: {}, clarification_needed: 'I had trouble understanding. Could you rephrase?' } }
+
+    // ── Handle WORKFLOW intent ─────────────────────────────────────────────────
+
+    if (intent.intent === 'workflow' && intent.workflow_steps && intent.workflow_steps.length > 1) {
+      // Check if ALL steps have their required fields
+      const allMissing: { stepIdx: number; fields: string[] }[] = []
+      for (let i = 0; i < intent.workflow_steps.length; i++) {
+        const step = intent.workflow_steps[i]
+        const req = REQUIRED_FIELDS[step.action_type] || []
+        // For dependent steps, some required fields will be filled at runtime from the prior step
+        // So only flag truly missing fields that aren't going to come from the dependency
+        const dependencyProvidedFields = new Set<string>()
+        if (step.depends_on != null) {
+          // Dependent steps get client_name, entity_id, property_short_loc from the prior step
+          dependencyProvidedFields.add('client_name')
+          dependencyProvidedFields.add('entity_id')
+          dependencyProvidedFields.add('property_short_loc')
+          dependencyProvidedFields.add('party_name')
+        }
+        const missing = req.filter(f => !dependencyProvidedFields.has(f) && (!step.extracted_fields[f] || step.extracted_fields[f] === ''))
+        if (missing.length > 0) allMissing.push({ stepIdx: i, fields: missing })
+      }
+
+      if (allMissing.length > 0) {
+        const desc = allMissing.map(m => {
+          const stepLabel = `Step ${m.stepIdx + 1} (${intent.workflow_steps![m.stepIdx].action_type})`
+          const fieldDesc = m.fields.map(f => FIELD_LABELS[f] || f).join(', ')
+          return `**${stepLabel}**: ${fieldDesc}`
+        }).join('\n')
+        return NextResponse.json({
+          answer: `To complete this workflow, I still need:\n${desc}\n\nCould you provide the missing information?`,
+          data_queried: 'None', record_count: 0, intent, raw_results: [],
+          action_proposal: null, workflow_proposal: null,
+          _pending_action_type: 'workflow',
+          _pending_action_fields: intent.workflow_steps[allMissing[0].stepIdx].extracted_fields,
+        })
+      }
+
+      // All steps have their required fields — propose workflow
+      return NextResponse.json({
+        answer: `I\u2019ve identified a **${intent.workflow_steps.length}-step workflow**. Please review each step below and approve:`,
+        data_queried: 'None', record_count: 0, intent, raw_results: [],
+        action_proposal: null,
+        workflow_proposal: { steps: intent.workflow_steps, ready: true as const },
+      })
     }
 
-    // ── Handle write intents ───────────────────────────────────────────────────
+    // ── Handle single write intents ────────────────────────────────────────────
 
     if (WRITE_INTENTS.includes(intent.intent as WriteIntent)) {
       const actionType = intent.intent as WriteIntent
-      const mergedFields: Record<string, string | null> = {
-        ...(pending_action_fields || {}),
-        ...(intent.extracted_fields || {}),
-      }
-
+      const mergedFields: Record<string, string | null> = { ...(pending_action_fields || {}), ...(intent.extracted_fields || {}) }
       const requiredFields = REQUIRED_FIELDS[actionType] || []
       const stillMissing = requiredFields.filter(f => !mergedFields[f] || mergedFields[f] === '')
 
       if (stillMissing.length > 0) {
         const missingDesc = stillMissing.map(f => FIELD_LABELS[f] || f).join(', and ')
-        const clarification = `To ${ACTION_VERB[actionType]}, I still need: **${missingDesc}**. Could you provide that?`
         return NextResponse.json({
-          answer: clarification,
+          answer: `To ${ACTION_VERB[actionType]}, I still need: **${missingDesc}**. Could you provide that?`,
           data_queried: 'None', record_count: 0,
           intent: { ...intent, extracted_fields: mergedFields, missing_required_fields: stillMissing },
           raw_results: [], action_proposal: null,
-          _pending_action_type: actionType,
-          _pending_action_fields: mergedFields,
+          _pending_action_type: actionType, _pending_action_fields: mergedFields,
         })
       }
 
-      // All required fields present → propose
       return NextResponse.json({
-        answer: 'I have everything I need. Here\'s what I\'m proposing — please review and edit any field before approving:',
+        answer: 'I have everything I need. Please review and edit any field before approving:',
         data_queried: 'None', record_count: 0,
         intent: { ...intent, extracted_fields: mergedFields, missing_required_fields: [] },
         raw_results: [],
@@ -401,7 +432,7 @@ The user is providing additional information. Extract new field values and merge
 
     if (intent.intent === 'clarify' || intent.intent === 'unsupported') {
       return NextResponse.json({
-        answer: intent.clarification_needed || 'Could you be more specific? I can read CRM data or create Leads, Follow-ups, Visits, Requirements, Opportunities, Campaigns, and Tasks.',
+        answer: intent.clarification_needed || 'Could you be more specific?',
         data_queried: 'None', record_count: 0, intent, raw_results: [],
       } satisfies AIAgentResponse)
     }
@@ -409,30 +440,22 @@ The user is providing additional information. Extract new field values and merge
     // ── Read queries ──────────────────────────────────────────────────────────
 
     const { results, entity_label } = await queryMockData(intent)
-    const resultsForPrompt = results.slice(0, 25)
-
     const answerRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
         messages: [
-          { role: 'system', content: 'You are PropDesk CRM AI. Answer concisely using ONLY the provided data. Format ₹ values in Indian numbering. Do NOT say "Based on the data".' },
-          { role: 'user', content: `User asked: "${message}"\nEntity: ${entity_label}\nTotal: ${results.length}\n${resultsForPrompt.length > 0 ? `Results:\n${JSON.stringify(resultsForPrompt, null, 2)}` : 'No matching records.'}` },
+          { role: 'system', content: 'You are PropDesk CRM AI. Answer concisely using ONLY the provided data. Format ₹ in Indian numbering.' },
+          { role: 'user', content: `User asked: "${message}"\nEntity: ${entity_label}\nTotal: ${results.length}\n${results.slice(0, 25).length > 0 ? `Results:\n${JSON.stringify(results.slice(0, 25), null, 2)}` : 'No matching records.'}` },
         ],
         temperature: 0.3, max_tokens: 512,
       }),
     })
-
     let finalAnswer = `Found ${results.length} ${entity_label.toLowerCase()}.`
-    if (answerRes.ok) {
-      const d = await answerRes.json()
-      const raw = d.choices?.[0]?.message?.content || ''
-      if (raw.trim()) finalAnswer = raw.trim()
-    }
+    if (answerRes.ok) { const d = await answerRes.json(); const r = d.choices?.[0]?.message?.content || ''; if (r.trim()) finalAnswer = r.trim() }
 
     return NextResponse.json({ answer: finalAnswer, data_queried: entity_label, record_count: results.length, intent, raw_results: results } satisfies AIAgentResponse)
-
   } catch (error) {
     console.error('AI Agent error:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unexpected error.' }, { status: 500 })
