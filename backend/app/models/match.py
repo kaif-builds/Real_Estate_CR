@@ -1,32 +1,23 @@
 """
-Match model — links requirements to properties with scoring.
-Spec: §3.3 Match. Prisma: schema.prisma L238–L252.
+Match model — property-requirement matching results.
+Matches MatchRow from frontend mockData.ts.
 """
 
 import sqlalchemy as sa
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class Match(Base):
     __tablename__ = "matches"
 
-    id = sa.Column(sa.String, primary_key=True)
+    id = sa.Column(sa.String, primary_key=True)  # e.g. M-3001
     requirement_id = sa.Column(sa.String, sa.ForeignKey("requirements.id"), nullable=False, index=True)
     property_id = sa.Column(sa.String, sa.ForeignKey("properties.id"), nullable=False, index=True)
-    score = sa.Column(sa.Float, nullable=False)           # 0–100
-    tier = sa.Column(sa.String, nullable=False)           # MatchTier enum
-    # score_breakdown: JSON object e.g. {"location": "PASS", "budget": "WARNING (...)"}
-    score_breakdown = sa.Column(sa.JSON, nullable=True)
-    status = sa.Column(sa.String, nullable=False, default="SUGGESTED")  # MatchStatus enum
-    reject_reason = sa.Column(sa.Text, nullable=True)
-    created_at = sa.Column(sa.DateTime(timezone=True), server_default=sa.func.now())
-    updated_at = sa.Column(
-        sa.DateTime(timezone=True),
-        server_default=sa.func.now(),
-        onupdate=sa.func.now(),
-    )
-
-    # Relationships
-    requirement = relationship("Requirement", back_populates="matches", foreign_keys=[requirement_id])
-    property = relationship("Property", back_populates="matches", foreign_keys=[property_id])
+    overall_score = sa.Column(sa.Float, nullable=True)
+    # MatchTier: 'HIGH' | 'GOOD' | 'POSSIBLE'
+    tier = sa.Column(sa.String, nullable=True)
+    # MatchStatus: 'SUGGESTED' | 'SHARED' | 'VISIT_SCHEDULED' | 'REJECTED' | 'SHORTLISTED'
+    status = sa.Column(sa.String, nullable=False, default="SUGGESTED")
+    # JSON object with scoring breakdown
+    match_factors = sa.Column(sa.JSON, nullable=True)
+    created_at = sa.Column(sa.String, nullable=True)  # ISO datetime

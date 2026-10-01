@@ -1,31 +1,36 @@
 """
-Call model — call activity log.
-Spec: §3.3 Call. Mock: mockData.ts L150–L159.
+Call model — telecalling and call log records.
+Matches CallLogRow from frontend mockData.ts.
 """
 
 import sqlalchemy as sa
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class Call(Base):
     __tablename__ = "calls"
 
-    id = sa.Column(sa.String, primary_key=True)
-    party_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=False, index=True)
-    lead_id = sa.Column(sa.String, sa.ForeignKey("leads.id"), nullable=True)
-    caller_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=False)
-    call_type = sa.Column(sa.String, nullable=False)       # CallType enum: OUTBOUND | INBOUND | MISSED
-    outcome = sa.Column(sa.String, nullable=False)         # CallOutcome enum
-    duration_minutes = sa.Column(sa.Integer, nullable=True, default=0)
+    id = sa.Column(sa.String, primary_key=True)  # e.g. C-4001
+    party_name = sa.Column(sa.String, nullable=True)  # denormalized
+    party_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=True, index=True)
+    phone = sa.Column(sa.String, nullable=True)
+    # CallType: 'OUTBOUND' | 'INBOUND' | 'MISSED'
+    call_type = sa.Column(sa.String, nullable=True)
+    duration_minutes = sa.Column(sa.Float, nullable=True)
+    # CallOutcome: 'CONNECTED' | 'NO_ANSWER' | 'BUSY' | 'WRONG_NUMBER' | 'CALL_BACK_LATER'
+    outcome = sa.Column(sa.String, nullable=True)
+    caller_name = sa.Column(sa.String, nullable=True)  # denormalized
+    caller_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=True, index=True)
+    call_time = sa.Column(sa.String, nullable=True)  # ISO datetime
     remarks = sa.Column(sa.Text, nullable=True)
-    called_at = sa.Column(sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
-    # Optional: follow-up scheduled from this call
-    follow_up_date = sa.Column(sa.DateTime(timezone=True), nullable=True)
-    follow_up_purpose = sa.Column(sa.String, nullable=True)
+    callback_time = sa.Column(sa.String, nullable=True)  # ISO datetime
+    # ── AI Call Recording Analysis ──
+    recording_url = sa.Column(sa.String, nullable=True)
+    ai_transcript = sa.Column(sa.Text, nullable=True)
+    ai_summary = sa.Column(sa.Text, nullable=True)
+    # JSON array: [{mention, amount, context}]
+    ai_rates = sa.Column(sa.JSON, nullable=True)
+    # 'Interested' | 'Neutral' | 'Not Interested'
+    ai_sentiment = sa.Column(sa.String, nullable=True)
+    ai_next_action = sa.Column(sa.Text, nullable=True)
     created_at = sa.Column(sa.DateTime(timezone=True), server_default=sa.func.now())
-
-    # Relationships
-    party = relationship("Party", foreign_keys=[party_id])
-    lead = relationship("Lead", back_populates="calls", foreign_keys=[lead_id])
-    caller = relationship("User", back_populates="calls_made", foreign_keys=[caller_id])

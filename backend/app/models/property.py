@@ -1,39 +1,32 @@
 """
-Property model — real estate listings.
-Spec: §3.3 Property. Prisma: schema.prisma L185–L210.
+Property model — real estate inventory.
+Matches PropertyRow from frontend mockData.ts.
 """
 
 import sqlalchemy as sa
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class Property(Base):
     __tablename__ = "properties"
 
-    id = sa.Column(sa.String, primary_key=True)
-    category = sa.Column(sa.String, nullable=False)      # PropertyCategory enum
-    short_loc = sa.Column(sa.String, nullable=False, index=True)
+    id = sa.Column(sa.String, primary_key=True)  # e.g. P-1001
+    # PropertyCategory: 'RENTAL_RESIDENTIAL' | 'RENTAL_COMMERCIAL' | 'BUY_SELL_FLAT' | 'BUY_SELL_COMMERCIAL' | 'PLOT'
+    category = sa.Column(sa.String, nullable=False, index=True)
+    short_loc = sa.Column(sa.String, nullable=True, index=True)  # micro-location code
     address = sa.Column(sa.Text, nullable=True)
-    price = sa.Column(sa.Float, nullable=False)
-    status = sa.Column(sa.String, nullable=False, default="NEW")  # PropertyStatus enum
-    owner_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=False)
-    # detailsJson: flexible JSON blob for BHK, size, furnishing, etc.
+    price = sa.Column(sa.Float, nullable=True)
+    # PropertyStatus: 'NEW' | 'UNDER_VERIFICATION' | 'AVAILABLE' | 'ACTIVE' | 'ON_HOLD' |
+    #   'RESERVED' | 'UNDER_NEGOTIATION' | 'SOLD' | 'RENTED' | 'LEASED' | 'WITHDRAWN' | 'INACTIVE'
+    status = sa.Column(sa.String, nullable=False, default="NEW", index=True)
+    owner_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=True, index=True)
+    owner_name = sa.Column(sa.String, nullable=True)  # denormalized
+    # Source: 'Owner' | 'Broker' | 'Builder-Marketing' etc.
+    source = sa.Column(sa.String, nullable=True)
+    availability_date = sa.Column(sa.String, nullable=True)
+    # JSON object with variable structure depending on category
     details_json = sa.Column(sa.JSON, nullable=True)
-    # Expected GPS coordinates for visit geo-fencing
-    expected_lat = sa.Column(sa.Float, nullable=True)
-    expected_lng = sa.Column(sa.Float, nullable=True)
-    last_verified_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
-    created_at = sa.Column(sa.DateTime(timezone=True), server_default=sa.func.now())
-    updated_at = sa.Column(
-        sa.DateTime(timezone=True),
-        server_default=sa.func.now(),
-        onupdate=sa.func.now(),
-    )
-
-    # Relationships
-    owner = relationship("Party", back_populates="owned_properties", foreign_keys=[owner_id])
-    matches = relationship("Match", back_populates="property", foreign_keys="Match.property_id")
-    visits = relationship("Visit", back_populates="property", foreign_keys="Visit.property_id")
-    opportunities = relationship("Opportunity", back_populates="property", foreign_keys="Opportunity.property_id")
-    transactions = relationship("Transaction", back_populates="property", foreign_keys="Transaction.property_id")
+    last_verified_at = sa.Column(sa.String, nullable=True)  # ISO datetime
+    created_at = sa.Column(sa.String, nullable=True)
+    lat = sa.Column(sa.Float, nullable=True)
+    lng = sa.Column(sa.Float, nullable=True)
