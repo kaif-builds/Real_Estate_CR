@@ -1,7 +1,7 @@
 """Campaign model — marketing campaigns."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import CampaignType, CampaignStatus
 
 
@@ -10,8 +10,8 @@ class Campaign(Base):
 
     id = sa.Column(sa.String, primary_key=True)
     name = sa.Column(sa.String, nullable=False)
-    type = sa.Column(sa.Enum(CampaignType, name='enum_campaign_type', create_type=False), nullable=False)
-    status = sa.Column(sa.Enum(CampaignStatus, name='enum_campaign_status', create_type=False), nullable=False, default='Draft')
+    type = sa.Column(PgEnum(CampaignType, name='enum_campaign_type'), nullable=False)
+    status = sa.Column(PgEnum(CampaignStatus, name='enum_campaign_status'), nullable=False, default='Draft')
     start_date = sa.Column(sa.Date(), nullable=False)
     end_date = sa.Column(sa.Date(), nullable=False)
     owner_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=False, index=True)

@@ -1,7 +1,7 @@
 """CallRecording model — uploaded call recordings with AI analysis."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import Sentiment
 
 
@@ -15,7 +15,7 @@ class CallRecording(Base):
     party_phone = sa.Column(sa.String, nullable=True)
     duration_seconds = sa.Column(sa.Integer, nullable=True)
     duration_formatted = sa.Column(sa.String, nullable=True)
-    sentiment = sa.Column(sa.Enum(Sentiment, name='enum_sentiment', create_type=False), nullable=True, default='Neutral')
+    sentiment = sa.Column(PgEnum(Sentiment, name='enum_sentiment'), nullable=True, default='Neutral')
     summary = sa.Column(sa.Text, nullable=True)
     transcript = sa.Column(sa.Text, nullable=True)
     rates = sa.Column(sa.JSON, nullable=True, default=[])

@@ -1,7 +1,7 @@
 """Audit log model — unified audit trail (manual and AI-assisted)."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import AuditAction, AuditEntityType
 
 
@@ -13,8 +13,8 @@ class AuditLog(Base):
     user_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=True, index=True)
     user_name = sa.Column(sa.String, nullable=True)
     user_role = sa.Column(sa.String, nullable=True)
-    action = sa.Column(sa.Enum(AuditAction, name='enum_audit_action', create_type=False), nullable=False)
-    entity_type = sa.Column(sa.Enum(AuditEntityType, name='enum_audit_entity_type', create_type=False), nullable=False, index=True)
+    action = sa.Column(PgEnum(AuditAction, name='enum_audit_action'), nullable=False)
+    entity_type = sa.Column(PgEnum(AuditEntityType, name='enum_audit_entity_type'), nullable=False, index=True)
     entity_id = sa.Column(sa.String, nullable=True, index=True)
     summary = sa.Column(sa.Text, nullable=True)
     details = sa.Column(sa.JSON, nullable=True)

@@ -1,7 +1,7 @@
 """ActivityLog model — timeline activity entries."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import ActivityType
 
 
@@ -9,7 +9,7 @@ class ActivityLog(Base):
     __tablename__ = "activity_logs"
 
     id = sa.Column(sa.String, primary_key=True)
-    activity_type = sa.Column(sa.Enum(ActivityType, name='enum_activity_type', create_type=False), nullable=False)
+    activity_type = sa.Column(PgEnum(ActivityType, name='enum_activity_type'), nullable=False)
     title = sa.Column(sa.String, nullable=True)
     description = sa.Column(sa.Text, nullable=True)
     actor_name = sa.Column(sa.String, nullable=True)

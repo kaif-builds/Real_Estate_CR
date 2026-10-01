@@ -1,7 +1,7 @@
 """TelemarketingContact model — contacts in telemarketing calling lists."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import CallDisposition
 
 
@@ -13,7 +13,7 @@ class TelemarketingContact(Base):
     name = sa.Column(sa.String, nullable=False)
     phone = sa.Column(sa.String, nullable=False)
     party_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=True)
-    status = sa.Column(sa.Enum(CallDisposition, name='enum_call_disposition', create_type=False), nullable=False, default='Not Called')
+    status = sa.Column(PgEnum(CallDisposition, name='enum_call_disposition'), nullable=False, default='Not Called')
     last_attempt_at = sa.Column(sa.DateTime(timezone=True), nullable=True)
     attempts_count = sa.Column(sa.Integer, nullable=False, default=0)
     assigned_telecaller = sa.Column(sa.String, nullable=True)

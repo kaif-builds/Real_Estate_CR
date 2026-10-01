@@ -1,7 +1,7 @@
 """TelemarketingCampaign model."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import TelemarketingPurpose, TeleCampaignStatus
 
 
@@ -17,7 +17,7 @@ class TelemarketingCampaign(Base):
     geography = sa.Column(sa.String, nullable=True)
     start_date = sa.Column(sa.Date(), nullable=False)
     end_date = sa.Column(sa.Date(), nullable=False)
-    purpose = sa.Column(sa.Enum(TelemarketingPurpose, name='enum_telemarketing_purpose', create_type=False), nullable=False)
+    purpose = sa.Column(PgEnum(TelemarketingPurpose, name='enum_telemarketing_purpose'), nullable=False)
     assigned_telecallers = sa.Column(sa.JSON, nullable=True, default=[])
-    status = sa.Column(sa.Enum(TeleCampaignStatus, name='enum_telecampaign_status', create_type=False), nullable=False, default='Draft')
+    status = sa.Column(PgEnum(TeleCampaignStatus, name='enum_telecampaign_status'), nullable=False, default='Draft')
     created_at = sa.Column(sa.DateTime(timezone=True), nullable=True)

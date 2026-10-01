@@ -1,7 +1,7 @@
 """User model — system user accounts."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import UserRole
 
 
@@ -12,7 +12,7 @@ class User(Base):
     name = sa.Column(sa.String, nullable=False)
     email = sa.Column(sa.String, nullable=False, unique=True, index=True)
     password_hash = sa.Column(sa.String, nullable=False, default="")
-    role = sa.Column(sa.Enum(UserRole, name='enum_user_role', create_type=False), nullable=False)
+    role = sa.Column(PgEnum(UserRole, name='enum_user_role'), nullable=False)
     status = sa.Column(sa.String, nullable=False, default="Active")
     party_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=True)
     last_login = sa.Column(sa.DateTime(timezone=True), nullable=True)

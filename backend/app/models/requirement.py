@@ -1,7 +1,7 @@
 """Requirement model — client property requirements."""
 
 import sqlalchemy as sa
-from app.core.database import Base
+from app.core.database import Base, PgEnum
 from app.models.enums import PropertyCategory, Intent, RequirementStatus
 
 
@@ -13,8 +13,8 @@ class Requirement(Base):
     client_name = sa.Column(sa.String, nullable=True)
     assigned_to_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=True, index=True)
     assigned_to_name = sa.Column(sa.String, nullable=True)
-    category = sa.Column(sa.Enum(PropertyCategory, name='enum_property_category', create_type=False), nullable=False)
-    intent = sa.Column(sa.Enum(Intent, name='enum_intent', create_type=False), nullable=False)
+    category = sa.Column(PgEnum(PropertyCategory, name='enum_property_category'), nullable=False)
+    intent = sa.Column(PgEnum(Intent, name='enum_intent'), nullable=False)
     preferred_short_locs = sa.Column(sa.JSON, nullable=True, default=[])
     alternate_locs = sa.Column(sa.JSON, nullable=True, default=[])
     min_budget = sa.Column(sa.Float, nullable=True)
@@ -23,6 +23,6 @@ class Requirement(Base):
     max_area = sa.Column(sa.Float, nullable=True)
     timeline = sa.Column(sa.String, nullable=True)
     facilities = sa.Column(sa.JSON, nullable=True, default=[])
-    status = sa.Column(sa.Enum(RequirementStatus, name='enum_requirement_status', create_type=False), nullable=False, default="NEW")
+    status = sa.Column(PgEnum(RequirementStatus, name='enum_requirement_status'), nullable=False, default="NEW")
     remarks = sa.Column(sa.Text, nullable=True)
     created_at = sa.Column(sa.DateTime(timezone=True), nullable=True)

@@ -40,6 +40,29 @@ class Base(DeclarativeBase):
     pass
 
 
+import enum as _enum
+import sqlalchemy as _sa
+
+def PgEnum(enum_cls: type[_enum.Enum], **kwargs):
+    """
+    Wrapper around sa.Enum that:
+      - Uses the enum member's .value (not .name) for DB storage
+      - Assumes the Postgres type already exists (create_type=False)
+      - Derives the type name from the enum class if not provided
+    
+    This fixes the asyncpg issue where Python enum member names (e.g. DIGITAL)
+    are sent to Postgres instead of values (e.g. Digital).
+    """
+    kwargs.setdefault("create_type", False)
+    kwargs.setdefault("values_callable", lambda e: [m.value for m in e])
+    if "name" not in kwargs:
+        # Convert e.g. ChannelType -> enum_channel_type
+        import re
+        snake = re.sub(r'(?<!^)(?=[A-Z])', '_', enum_cls.__name__).lower()
+        kwargs["name"] = f"enum_{snake}"
+    return _sa.Enum(enum_cls, **kwargs)
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency — yields an async DB session."""
     async with async_session_factory() as session:
