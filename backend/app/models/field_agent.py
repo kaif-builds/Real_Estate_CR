@@ -1,21 +1,18 @@
-"""
-FieldAgent model — field agent roster for visit management.
-Matches FieldAgentRosterRow interface.
-"""
+"""FieldAgent model — field agent roster for visit management."""
 
 import sqlalchemy as sa
 from app.core.database import Base
+from app.models.enums import FieldAgentStatus
 
 
 class FieldAgent(Base):
     __tablename__ = "field_agents"
 
-    id = sa.Column(sa.String, primary_key=True)  # e.g. FA-01
+    id = sa.Column(sa.String, primary_key=True)
     user_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=False, unique=True)
-    name = sa.Column(sa.String, nullable=False)  # denormalized
+    name = sa.Column(sa.String, nullable=False)
     phone = sa.Column(sa.String, nullable=True)
-    # 'Available' | 'On Visit' | 'Off Duty'
-    status = sa.Column(sa.String, nullable=False, default='Available')
+    status = sa.Column(sa.Enum(FieldAgentStatus, name='enum_field_agent_status', create_type=False), nullable=False, default='Available')
     today_visit_count = sa.Column(sa.Integer, nullable=True, default=0)
     week_completed_visits = sa.Column(sa.Integer, nullable=True, default=0)
     average_rating = sa.Column(sa.Float, nullable=True, default=0.0)

@@ -1,28 +1,23 @@
-"""
-FollowUp model — follow-up tasks on leads, requirements, and opportunities.
-Matches FollowUpRow from frontend mockData.ts.
-"""
+"""FollowUp model — follow-up tasks on leads, requirements, and opportunities."""
 
 import sqlalchemy as sa
 from app.core.database import Base
+from app.models.enums import FollowUpEntityType, FollowUpPriority, FollowUpStatus
 
 
 class FollowUp(Base):
     __tablename__ = "follow_ups"
 
-    id = sa.Column(sa.String, primary_key=True)  # e.g. FU-3001
-    client_name = sa.Column(sa.String, nullable=True)  # denormalized
+    id = sa.Column(sa.String, primary_key=True)
+    client_name = sa.Column(sa.String, nullable=True)
     client_id = sa.Column(sa.String, sa.ForeignKey("parties.id"), nullable=True, index=True)
-    # EntityType: 'Requirement' | 'Lead' | 'Opportunity'
-    entity_type = sa.Column(sa.String, nullable=False)
+    entity_type = sa.Column(sa.Enum(FollowUpEntityType, name='enum_followup_entity_type', create_type=False), nullable=False)
     entity_id = sa.Column(sa.String, nullable=False)
     purpose = sa.Column(sa.Text, nullable=True)
-    # Priority: 'LOW' | 'MEDIUM' | 'HIGH'
-    priority = sa.Column(sa.String, nullable=False, default="MEDIUM")
-    due_date = sa.Column(sa.String, nullable=False)  # ISO datetime
-    # FollowUpStatus: 'PENDING' | 'COMPLETED' | 'RESCHEDULED' | 'CANCELLED' | 'OVERDUE' | 'NO_RESPONSE'
-    status = sa.Column(sa.String, nullable=False, default="PENDING")
-    responsible_name = sa.Column(sa.String, nullable=True)  # denormalized
+    priority = sa.Column(sa.Enum(FollowUpPriority, name='enum_followup_priority', create_type=False), nullable=False, default="MEDIUM")
+    due_date = sa.Column(sa.DateTime(timezone=True), nullable=False)
+    status = sa.Column(sa.Enum(FollowUpStatus, name='enum_followup_status', create_type=False), nullable=False, default="PENDING")
+    responsible_name = sa.Column(sa.String, nullable=True)
     responsible_id = sa.Column(sa.String, sa.ForeignKey("users.id"), nullable=True, index=True)
     expected_outcome = sa.Column(sa.Text, nullable=True)
-    created_at = sa.Column(sa.String, nullable=True)  # ISO datetime
+    created_at = sa.Column(sa.DateTime(timezone=True), nullable=True)

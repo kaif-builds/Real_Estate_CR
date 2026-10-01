@@ -95,7 +95,6 @@ const CATEGORY_OPTIONS: PropertyCategoryType[] = [
 
 const TRANSACTION_OPTIONS: TransactionType[] = [
   'Sale',
-  'Purchase',
   'Rent',
   'Lease',
 ]

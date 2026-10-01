@@ -107,7 +107,6 @@ export type PropertyCategoryType =
 
 export type TransactionType =
   | 'Sale'
-  | 'Purchase'
   | 'Rent'
   | 'Lease'
 
@@ -5645,7 +5644,7 @@ export const MOCK_CAMPAIGNS: CampaignRow[] = [
     target_audience: ['Buyers', 'Investors'],
     geography: '09-Super_Corridor, Indore',
     categories: ['Commercial', 'Residential'],
-    transaction_types: ['Sale', 'Purchase'],
+    transaction_types: ['Sale'],
     planned_budget: 75000,
     actual_spend: 68000,
     target_leads: 50,
