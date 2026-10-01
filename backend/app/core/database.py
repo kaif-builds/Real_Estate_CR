@@ -21,6 +21,10 @@ _engine_kwargs: dict = {
 }
 if not _is_sqlite:
     _engine_kwargs["pool_pre_ping"] = True
+    # Supabase/Supavisor pooler runs in transaction mode, which doesn't support
+    # asyncpg's prepared statement cache. Disable it to avoid
+    # "prepared statement already exists" errors.
+    _engine_kwargs["connect_args"] = {"statement_cache_size": 0}
 
 engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
 
