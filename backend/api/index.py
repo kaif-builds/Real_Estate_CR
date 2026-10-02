@@ -8,4 +8,12 @@ We re-export the FastAPI app from our main module so that:
   - No code duplication between local and deployed environments
 """
 
+import os
+import sys
+
+# Ensure project root is in sys.path so 'app' is always importable
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
 from app.main import app  # noqa: F401 — re-export for Vercel
