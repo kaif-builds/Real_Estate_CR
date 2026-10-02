@@ -66,17 +66,25 @@ class LeadCreate(BaseModel):
     referral_code: Optional[str] = None
     ad_reference: Optional[str] = None
     referral_partner_id: Optional[str] = None
+    enquiry_at: Optional[str | datetime] = None
 
 
 class LeadUpdate(BaseModel):
+    party_id: Optional[str] = None
+    lead_type: Optional[str] = None
+    channel_type: Optional[str] = None
+    source: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
     assigned_to_id: Optional[str] = None
     value: Optional[float] = None
     remarks: Optional[str] = None
-    next_follow_up_at: Optional[datetime] = None
-    channel_type: Optional[str] = None
-    source: Optional[str] = None
+    campaign_id: Optional[str] = None
+    referral_code: Optional[str] = None
+    ad_reference: Optional[str] = None
+    referral_partner_id: Optional[str] = None
+    next_follow_up_at: Optional[str | datetime] = None
+    enquiry_at: Optional[str | datetime] = None
 
 
 class LeadResponse(BaseModel):

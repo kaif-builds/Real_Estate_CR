@@ -7,13 +7,15 @@
  * "+ New Lead" form with Channel Type toggle, dynamic Source dropdown, Linked Campaign, Referral/Campaign Code, Ad Reference, Enquiry Date/Time
  * Role: SUPER_ADMIN, OFFICE_EXECUTIVE only
  *
- * TEMPORARY: Uses mock data from mockData.ts.
- * Will be swapped to real API calls during the backend-wiring pass.
+ * DATA SOURCE: Real FastAPI backend via apiClient.ts
  */
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Plus, Globe, Building2, Megaphone, Tag, Calendar, ExternalLink, Handshake } from 'lucide-react'
+import {
+  Plus, Globe, Building2, Megaphone, Calendar, ExternalLink,
+  Handshake, Loader2, AlertCircle, Trash2, ShieldAlert, RefreshCw
+} from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,14 +28,11 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import {
   formatPrice, formatDateTime, priorityClasses, statusClasses,
 } from '@/lib/formatters'
+import { apiClient } from '@/lib/apiClient'
 import {
-  MOCK_LEADS,
-  MOCK_PARTIES,
-  MOCK_USERS,
-  MOCK_CAMPAIGNS,
   DEFAULT_LEAD_SOURCES,
-  MOCK_REFERRAL_PARTNERS,
   type LeadRow,
+  type PartyRow,
   type ChannelType,
 } from '@/lib/mockData'
 
@@ -44,6 +43,45 @@ const TYPES      = ['', 'BUYER', 'SELLER', 'TENANT', 'LANDLORD', 'INVESTOR', 'CO
 const PRIORITIES = ['', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
 const CHANNELS   = ['', 'Digital', 'Offline'] as const
 
+// ── Error Helper ─────────────────────────────────────────────────────────────
+
+function parseApiError(err: unknown, defaultMsg: string): { status?: number; message: string; isForbidden?: boolean } {
+  if (!(err instanceof Error)) return { message: defaultMsg }
+  const raw = err.message
+  const match = raw.match(/API (\d{3}):/)
+  const status = match ? parseInt(match[1], 10) : undefined
+
+  let detail = raw
+  try {
+    const jsonStart = raw.indexOf('{')
+    if (jsonStart !== -1) {
+      const parsed = JSON.parse(raw.slice(jsonStart))
+      if (parsed.detail) {
+        if (typeof parsed.detail === 'string') {
+          detail = parsed.detail
+        } else if (Array.isArray(parsed.detail)) {
+          detail = parsed.detail.map((d: any) => `${d.loc?.slice(-1)[0] || 'field'}: ${d.msg}`).join(', ')
+        }
+      }
+    }
+  } catch {
+    // ignore JSON parsing issues
+  }
+
+  if (status === 403) {
+    return {
+      status: 403,
+      message: "You don't have permission to perform this action (requires SUPER_ADMIN or OFFICE_EXECUTIVE).",
+      isForbidden: true,
+    }
+  }
+  if (status === 401) {
+    return { status: 401, message: "Not authenticated — provide a valid session or mock role header." }
+  }
+
+  return { status, message: detail || defaultMsg }
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 function LeadsContent() {
@@ -51,8 +89,17 @@ function LeadsContent() {
   const initialStatus = searchParams.get('status') || ''
   const initialSearch = searchParams.get('search') || ''
 
-  // Local mutable copy of leads (supports create + inline patch)
-  const [leads, setLeads] = useState<LeadRow[]>([...MOCK_LEADS])
+  // Real backend state
+  const [leads, setLeads] = useState<LeadRow[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [permissionDenied, setPermissionDenied] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Parties for create modal picker
+  const [parties, setParties] = useState<PartyRow[]>([])
+  const [partiesLoading, setPartiesLoading] = useState(false)
 
   // Page-specific filters (search handled by DataTable)
   const [fStatus, setFStatus]     = useState(initialStatus)
@@ -69,11 +116,50 @@ function LeadsContent() {
 
   // Create Modal State
   const [showCreate, setShowCreate] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [newChannelType, setNewChannelType] = useState<ChannelType>('Digital')
   const [newSource, setNewSource] = useState<string>('Website')
-  const [newCampaignId, setNewCampaignId] = useState<string>('')
-  const [newPartnerId, setNewPartnerId] = useState<string>('')
   const [newReferralCode, setNewReferralCode] = useState<string>('')
+
+  // ── Fetch Leads from Real Backend ──────────────────────────────────────────
+  const fetchLeads = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    setPermissionDenied(false)
+    try {
+      const data = await apiClient.get<{ items: LeadRow[]; total: number }>('/api/leads?limit=200')
+      setLeads(data.items || [])
+      setTotalCount(data.total || 0)
+    } catch (err: unknown) {
+      const parsed = parseApiError(err, 'Failed to load leads')
+      if (parsed.status === 403) {
+        setPermissionDenied(true)
+      } else {
+        setError(parsed.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // ── Fetch Parties for Picker ───────────────────────────────────────────────
+  const fetchParties = useCallback(async () => {
+    setPartiesLoading(true)
+    try {
+      const data = await apiClient.get<{ items: PartyRow[]; total: number }>('/api/parties?limit=200')
+      setParties(data.items || [])
+    } catch {
+      // Non-critical: form will show fallback or error if parties can't load
+    } finally {
+      setPartiesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchLeads()
+    fetchParties()
+  }, [fetchLeads, fetchParties])
 
   // Handle Channel Type toggle in "+ New Lead" modal
   const handleChannelTypeChange = (type: ChannelType) => {
@@ -82,7 +168,6 @@ function LeadsContent() {
       s => s.channel_type === type && s.is_active
     )
     setNewSource(firstMatchingSource ? firstMatchingSource.name : (type === 'Digital' ? 'Website' : 'Newspaper'))
-    setNewPartnerId('')
     setNewReferralCode('')
   }
 
@@ -112,60 +197,88 @@ function LeadsContent() {
     return items
   }, [leads, fStatus, fType, fPriority, fChannel, fSource])
 
-  // ── Create lead ──────────────────────────────────────────────────────────
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
+  // ── Create lead (Real Backend POST /api/leads) ─────────────────────────────
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setCreateLoading(true)
+    setCreateError(null)
+
     const fd = new FormData(e.currentTarget)
     const partyId = fd.get('party_id') as string
-    const party = MOCK_PARTIES.find(p => p.id === partyId)
-    const assignedId = (fd.get('assigned_to_id') as string) || null
-    const assigned = MOCK_USERS.find(u => u.id === assignedId)
-    const campaignId = newCampaignId || null
-    const campaign = campaignId ? MOCK_CAMPAIGNS.find(c => c.id === campaignId) : null
     const enquiryAtInput = fd.get('enquiry_at') as string
-    const partner = newPartnerId ? MOCK_REFERRAL_PARTNERS.find(p => p.id === newPartnerId) : null
 
-    const newLead: LeadRow = {
-      id: `L-${Date.now().toString(36).toUpperCase().slice(-8)}`,
+    const payload = {
       party_id: partyId,
-      party_name: party?.name ?? '—',
       channel_type: newChannelType,
       source: newSource,
       lead_type: fd.get('lead_type') as string,
       status: 'NEW',
       priority: (fd.get('priority') as string) || 'MEDIUM',
-      assigned_to_id: assignedId,
-      assigned_to_name: assigned?.name ?? null,
+      assigned_to_id: null, // Decision 1: Always send null until User Management is live
       value: fd.get('value') ? parseFloat(fd.get('value') as string) : null,
       remarks: (fd.get('remarks') as string) || null,
-      campaign_id: campaignId,
-      campaign_name: campaign?.name ?? null,
-      referral_partner_id: partner ? partner.id : null,
-      referral_partner_name: partner ? partner.name : null,
-      referral_code: newReferralCode || (fd.get('referral_code') as string) || (partner?.referral_code ?? null),
+      campaign_id: null, // Decision 4: Send null until Marketing is live
+      referral_partner_id: null, // Decision 4: Send null until Marketing is live
+      referral_code: newReferralCode || (fd.get('referral_code') as string) || null,
       ad_reference: newChannelType === 'Digital' ? ((fd.get('ad_reference') as string) || null) : null,
       enquiry_at: enquiryAtInput ? new Date(enquiryAtInput).toISOString() : new Date().toISOString(),
-      last_activity_at: new Date().toISOString(),
-      next_follow_up_at: null,
-      created_at: new Date().toISOString(),
     }
 
-    setLeads(prev => [newLead, ...prev])
-    setShowCreate(false)
-    setNewPartnerId('')
-    setNewReferralCode('')
-    // Reset form state defaults
-    setNewChannelType('Digital')
-    setNewSource('Website')
-    setNewCampaignId('')
+    try {
+      await apiClient.post('/api/leads', payload)
+      setShowCreate(false)
+      setNewReferralCode('')
+      setNewChannelType('Digital')
+      setNewSource('Website')
+      await fetchLeads()
+    } catch (err: unknown) {
+      const parsed = parseApiError(err, 'Failed to create lead')
+      setCreateError(parsed.message)
+    } finally {
+      setCreateLoading(false)
+    }
   }
 
-  // ── Inline status change ─────────────────────────────────────────────────
-  const patchStatus = useCallback((id: string, newStatus: string) => {
+  // ── Inline status change (Real Backend PATCH /api/leads/{id}) ──────────────
+  const patchStatus = useCallback(async (id: string, newStatus: string) => {
+    const current = leads.find(l => l.id === id)
+    const oldStatus = current?.status
+    if (!oldStatus || oldStatus === newStatus) return
+
+    // Optimistic UI update
     setLeads(prev => prev.map(l =>
       l.id === id ? { ...l, status: newStatus, last_activity_at: new Date().toISOString() } : l
     ))
-  }, [])
+    setError(null)
+
+    try {
+      await apiClient.patch(`/api/leads/${id}`, { status: newStatus })
+    } catch (err: unknown) {
+      // Rollback on failure
+      setLeads(prev => prev.map(l =>
+        l.id === id ? { ...l, status: oldStatus } : l
+      ))
+      const parsed = parseApiError(err, `Failed to update status for lead ${id}`)
+      setError(parsed.message)
+    }
+  }, [leads])
+
+  // ── Delete lead (Real Backend DELETE /api/leads/{id}) ──────────────────────
+  const handleDelete = async (id: string, partyName: string) => {
+    if (!confirm(`Are you sure you want to delete lead ${id} for ${partyName}?`)) return
+    setDeletingId(id)
+    setError(null)
+
+    try {
+      await apiClient.delete(`/api/leads/${id}`)
+      await fetchLeads()
+    } catch (err: unknown) {
+      const parsed = parseApiError(err, `Failed to delete lead ${id}`)
+      setError(parsed.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   // ── Column definitions ──────────────────────────────────────────────────
   const columns: ColumnDef<LeadRow>[] = useMemo(() => [
@@ -309,18 +422,33 @@ function LeadsContent() {
       header: 'Actions',
       sortable: false,
       render: (r) => (
-        <Select
-          value={r.status}
-          onChange={e => patchStatus(r.id, e.target.value)}
-          className="h-7 text-xs px-2 w-auto min-w-[95px]"
-        >
-          {STATUSES.filter(Boolean).map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <Select
+            value={r.status}
+            onChange={e => patchStatus(r.id, e.target.value)}
+            className="h-7 text-xs px-2 w-auto min-w-[95px]"
+          >
+            {STATUSES.filter(Boolean).map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </Select>
+          <button
+            type="button"
+            onClick={() => handleDelete(r.id, r.party_name)}
+            disabled={deletingId === r.id}
+            title={`Delete lead ${r.id}`}
+            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {deletingId === r.id ? (
+              <Loader2 size={13} className="animate-spin text-red-500" />
+            ) : (
+              <Trash2 size={13} />
+            )}
+          </button>
+        </div>
       ),
     },
-  ], [patchStatus])
+  ], [patchStatus, deletingId])
 
   return (
     <AppLayout>
@@ -329,93 +457,149 @@ function LeadsContent() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Manage and track your sales pipeline leads and acquisition channels</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {loading ? 'Loading…' : `${totalCount} active leads`} · Manage and track your sales pipeline leads and acquisition channels
+            </p>
           </div>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus size={16} className="mr-1.5" /> New Lead
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchLeads()}
+              disabled={loading}
+              title="Refresh list from backend"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </Button>
+            <Button onClick={() => { setShowCreate(true); setCreateError(null) }}>
+              <Plus size={16} className="mr-1.5" /> New Lead
+            </Button>
+          </div>
         </div>
 
-        {/* DataTable with sorting, search, and page-specific filters */}
-        <DataTable<LeadRow>
-          columns={columns}
-          data={filtered}
-          totalCount={leads.length}
-          initialSearch={initialSearch}
-          rowKey={(r) => r.id}
-          searchFields={[
-            (r) => r.party_name,
-            (r) => r.id,
-            (r) => r.source,
-            (r) => r.channel_type,
-            (r) => r.campaign_name,
-            (r) => r.referral_code,
-            (r) => r.ad_reference,
-            (r) => r.assigned_to_name,
-          ]}
-          searchPlaceholder="Search by name, ID, source, channel, campaign…"
-          hasActiveFilters={!!fStatus || !!fType || !!fPriority || !!fChannel || !!fSource}
-          onClearFilters={() => {
-            setFStatus('')
-            setFType('')
-            setFPriority('')
-            setFChannel('')
-            setFSource('')
-          }}
-          emptyTitle="No leads found"
-          emptyDescription='Click "+ New Lead" to create one.'
-          filterSlot={
-            <>
-              {/* Status Filter */}
-              <Select value={fStatus} onChange={e => setFStatus(e.target.value)} className="h-8 text-sm min-w-[110px]">
-                <option value="">All Status</option>
-                <option value="ACTIVE">Active (All)</option>
-                {STATUSES.filter(s => Boolean(s) && s !== 'ACTIVE').map(s => <option key={s} value={s}>{s}</option>)}
-              </Select>
+        {/* Permission Denied (403) Banner */}
+        {permissionDenied && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 px-6 py-8 rounded-xl text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+              <ShieldAlert size={24} />
+            </div>
+            <h2 className="text-lg font-bold">Access Restricted</h2>
+            <p className="text-sm text-amber-800 max-w-md mx-auto">
+              You don&apos;t have permission to view Leads. Leads management requires the Super Admin or Office Executive role.
+            </p>
+          </div>
+        )}
 
-              {/* Type Filter */}
-              <Select value={fType} onChange={e => setFType(e.target.value)} className="h-8 text-sm min-w-[110px]">
-                <option value="">All Types</option>
-                {TYPES.filter(Boolean).map(t => <option key={t} value={t}>{t}</option>)}
-              </Select>
+        {/* Global Error Banner */}
+        {error && !permissionDenied && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <AlertCircle size={16} className="shrink-0" />
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">✕</button>
+          </div>
+        )}
 
-              {/* Priority Filter */}
-              <Select value={fPriority} onChange={e => setFPriority(e.target.value)} className="h-8 text-sm min-w-[110px]">
-                <option value="">All Priority</option>
-                {PRIORITIES.filter(Boolean).map(p => <option key={p} value={p}>{p}</option>)}
-              </Select>
+        {/* Main Content: Loading vs DataTable */}
+        {!permissionDenied && (
+          loading && leads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400 text-sm bg-white rounded-lg border border-slate-200">
+              <Loader2 size={24} className="animate-spin mb-2 text-indigo-600" />
+              <span>Loading leads from backend…</span>
+            </div>
+          ) : (
+            <DataTable<LeadRow>
+              columns={columns}
+              data={filtered}
+              totalCount={leads.length}
+              initialSearch={initialSearch}
+              rowKey={(r) => r.id}
+              searchFields={[
+                (r) => r.party_name,
+                (r) => r.id,
+                (r) => r.source,
+                (r) => r.channel_type,
+                (r) => r.campaign_name,
+                (r) => r.referral_code,
+                (r) => r.ad_reference,
+                (r) => r.assigned_to_name,
+              ]}
+              searchPlaceholder="Search by name, ID, source, channel, campaign…"
+              hasActiveFilters={!!fStatus || !!fType || !!fPriority || !!fChannel || !!fSource}
+              onClearFilters={() => {
+                setFStatus('')
+                setFType('')
+                setFPriority('')
+                setFChannel('')
+                setFSource('')
+              }}
+              emptyTitle="No leads found"
+              emptyDescription='Click "+ New Lead" to create one.'
+              filterSlot={
+                <>
+                  {/* Status Filter */}
+                  <Select value={fStatus} onChange={e => setFStatus(e.target.value)} className="h-8 text-sm min-w-[110px]">
+                    <option value="">All Status</option>
+                    <option value="ACTIVE">Active (All)</option>
+                    {STATUSES.filter(s => Boolean(s) && s !== 'ACTIVE').map(s => <option key={s} value={s}>{s}</option>)}
+                  </Select>
 
-              {/* Channel Type Filter */}
-              <Select
-                value={fChannel}
-                onChange={e => {
-                  setFChannel(e.target.value)
-                  setFSource('') // reset source when channel changes
-                }}
-                className="h-8 text-sm min-w-[120px]"
-              >
-                <option value="">All Channels</option>
-                {CHANNELS.filter(Boolean).map(ch => <option key={ch} value={ch}>{ch}</option>)}
-              </Select>
+                  {/* Type Filter */}
+                  <Select value={fType} onChange={e => setFType(e.target.value)} className="h-8 text-sm min-w-[110px]">
+                    <option value="">All Types</option>
+                    {TYPES.filter(Boolean).map(t => <option key={t} value={t}>{t}</option>)}
+                  </Select>
 
-              {/* Source Filter (Filtered dynamically) */}
-              <Select value={fSource} onChange={e => setFSource(e.target.value)} className="h-8 text-sm min-w-[130px]">
-                <option value="">All Sources</option>
-                {availableSourcesForFilter.map(s => <option key={s} value={s}>{s}</option>)}
-              </Select>
-            </>
-          }
-        />
+                  {/* Priority Filter */}
+                  <Select value={fPriority} onChange={e => setFPriority(e.target.value)} className="h-8 text-sm min-w-[110px]">
+                    <option value="">All Priority</option>
+                    {PRIORITIES.filter(Boolean).map(p => <option key={p} value={p}>{p}</option>)}
+                  </Select>
+
+                  {/* Channel Type Filter */}
+                  <Select
+                    value={fChannel}
+                    onChange={e => {
+                      setFChannel(e.target.value)
+                      setFSource('') // reset source when channel changes
+                    }}
+                    className="h-8 text-sm min-w-[120px]"
+                  >
+                    <option value="">All Channels</option>
+                    {CHANNELS.filter(Boolean).map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                  </Select>
+
+                  {/* Source Filter (Filtered dynamically) */}
+                  <Select value={fSource} onChange={e => setFSource(e.target.value)} className="h-8 text-sm min-w-[130px]">
+                    <option value="">All Sources</option>
+                    {availableSourcesForFilter.map(s => <option key={s} value={s}>{s}</option>)}
+                  </Select>
+                </>
+              }
+            />
+          )
+        )}
 
         {/* ── Create Lead Dialog ──────────────────────────────────────────── */}
         <Dialog open={showCreate} onClose={() => setShowCreate(false)} title="New Lead">
           <form onSubmit={handleCreate} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-            {/* Party Selection */}
+            {/* Create Error Banner */}
+            {createError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs">
+                <AlertCircle size={14} className="shrink-0" />
+                <span className="flex-1">{createError}</span>
+              </div>
+            )}
+
+            {/* Party Selection (Real Backend /api/parties) */}
             <div>
               <Label htmlFor="party_id">Party *</Label>
-              <Select name="party_id" id="party_id" required className="mt-1">
-                <option value="">Select party…</option>
-                {MOCK_PARTIES.map(p => <option key={p.id} value={p.id}>{p.name} ({p.mobile})</option>)}
+              <Select name="party_id" id="party_id" required className="mt-1" disabled={partiesLoading}>
+                <option value="">{partiesLoading ? 'Loading parties…' : 'Select party…'}</option>
+                {parties.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.mobile || p.id})
+                  </option>
+                ))}
               </Select>
             </div>
 
@@ -488,7 +672,6 @@ function LeadsContent() {
                     const src = e.target.value
                     setNewSource(src)
                     if (src !== 'Referral Partner') {
-                      setNewPartnerId('')
                       setNewReferralCode('')
                     }
                   }}
@@ -505,60 +688,26 @@ function LeadsContent() {
                 </Select>
               </div>
 
-              {/* Conditional Partner Picker when Source is Referral Partner */}
+              {/* Referral Partner Picker note (Decision 4) */}
               {newSource === 'Referral Partner' && (
-                <div className="bg-indigo-50/60 p-3 rounded-lg border border-indigo-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="referral_partner" className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                      <Handshake size={14} className="text-indigo-600" />
-                      Referred by Partner *
-                    </Label>
-                    <span className="text-[10px] bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full">
-                      Partner Attribution
-                    </span>
+                <div className="bg-indigo-50/60 p-3 rounded-lg border border-indigo-200 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
+                    <Handshake size={14} className="text-indigo-600" />
+                    Referral Partner
                   </div>
-                  <Select
-                    id="referral_partner"
-                    value={newPartnerId}
-                    onChange={(e) => {
-                      const pId = e.target.value
-                      setNewPartnerId(pId)
-                      const partner = MOCK_REFERRAL_PARTNERS.find(p => p.id === pId)
-                      if (partner) {
-                        setNewReferralCode(partner.referral_code)
-                      }
-                    }}
-                    required
-                    className="mt-1 bg-white text-xs"
-                  >
-                    <option value="">-- Choose Referral Partner --</option>
-                    {MOCK_REFERRAL_PARTNERS.filter(p => p.status === 'Active').map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.category} • {p.referral_code})
-                      </option>
-                    ))}
-                  </Select>
+                  <p className="text-xs text-indigo-700">
+                    Partner directory selection will be available once Marketing is live. Enter the partner referral code below.
+                  </p>
                 </div>
               )}
 
-              {/* Optional Linked Campaign */}
+              {/* Optional Linked Campaign (Decision 4) */}
               <div>
                 <Label htmlFor="campaign_id" className="text-xs text-slate-600">
                   Linked Marketing Campaign (Optional)
                 </Label>
-                <Select
-                  name="campaign_id"
-                  id="campaign_id"
-                  value={newCampaignId}
-                  onChange={e => setNewCampaignId(e.target.value)}
-                  className="mt-1"
-                >
-                  <option value="">None (Organic / Unlinked)</option>
-                  {MOCK_CAMPAIGNS.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.type} • {c.status})
-                    </option>
-                  ))}
+                <Select name="campaign_id" id="campaign_id" disabled className="mt-1 bg-slate-100 text-slate-400 cursor-not-allowed">
+                  <option value="">Available once Marketing is live</option>
                 </Select>
               </div>
 
@@ -607,7 +756,7 @@ function LeadsContent() {
               )}
             </div>
 
-            {/* Value & Assigned To */}
+            {/* Value & Assigned To (Decision 1) */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="value">Estimated Value (₹)</Label>
@@ -615,9 +764,8 @@ function LeadsContent() {
               </div>
               <div>
                 <Label htmlFor="assigned_to_id">Assigned To</Label>
-                <Select name="assigned_to_id" id="assigned_to_id" className="mt-1">
-                  <option value="">Unassigned</option>
-                  {MOCK_USERS.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                <Select name="assigned_to_id" id="assigned_to_id" disabled className="mt-1 bg-slate-100 text-slate-500 cursor-not-allowed">
+                  <option value="">Unassigned (Agent assignment will be available once User Management is live)</option>
                 </Select>
               </div>
             </div>
@@ -630,7 +778,10 @@ function LeadsContent() {
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button type="submit">Create Lead</Button>
+              <Button type="submit" disabled={createLoading}>
+                {createLoading && <Loader2 size={14} className="animate-spin mr-1.5" />}
+                Create Lead
+              </Button>
             </div>
           </form>
         </Dialog>
