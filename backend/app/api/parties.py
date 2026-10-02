@@ -15,8 +15,13 @@ from app.core.database import get_db
 from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.party import Party
+from app.models.property import Property
 from app.models.requirement import Requirement
 from app.models.user import User
+from app.models.visit import Visit
+from app.models.follow_up import FollowUp
+from app.models.call import Call
+from app.models.call_recording import CallRecording
 from app.schemas import PartyCreate, PartyUpdate, PartyResponse
 
 router = APIRouter(prefix="/parties", tags=["parties"])
@@ -220,3 +225,43 @@ async def patch_party(
     party.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return {"id": party.id, "message": "Party updated"}
+
+
+# ── Delete party ──────────────────────────────────────────────────────────────
+
+@router.delete("/{party_id}")
+async def delete_party(
+    party_id: str,
+    user: CurrentUser = Depends(require_roles(*_OE)),
+    db: AsyncSession = Depends(get_db),
+):
+    party = (await db.execute(select(Party).where(Party.id == party_id))).scalar_one_or_none()
+    if not party:
+        raise HTTPException(404, "Party not found")
+
+    # Check for linked records across entities
+    checks = [
+        (Lead, Lead.party_id, "lead", "leads"),
+        (Requirement, Requirement.client_id, "requirement", "requirements"),
+        (Opportunity, Opportunity.client_id, "opportunity", "opportunities"),
+        (Property, Property.owner_id, "property", "properties"),
+        (Visit, Visit.client_id, "visit", "visits"),
+        (FollowUp, FollowUp.client_id, "follow-up", "follow-ups"),
+        (Call, Call.party_id, "call", "calls"),
+        (CallRecording, CallRecording.party_id, "call recording", "call recordings"),
+    ]
+
+    linked_items: list[str] = []
+    for model, fk_col, singular, plural in checks:
+        cnt = (await db.execute(select(func.count()).select_from(model).where(fk_col == party_id))).scalar_one()
+        if cnt > 0:
+            linked_items.append(f"{cnt} {singular if cnt == 1 else plural}")
+
+    if linked_items:
+        detail_msg = f"Cannot delete: this party has {', '.join(linked_items)}. Reassign or remove these first."
+        raise HTTPException(status_code=409, detail=detail_msg)
+
+    await db.delete(party)
+    await db.flush()
+    return {"id": party_id, "message": "Party deleted successfully"}
+

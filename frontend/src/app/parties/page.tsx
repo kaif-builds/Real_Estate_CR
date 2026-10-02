@@ -6,12 +6,11 @@
  * "+ New Party" form with multi-role selection.
  * Role: SUPER_ADMIN, OFFICE_EXECUTIVE only.
  *
- * TEMPORARY: Uses mock data from mockData.ts.
- * Will be swapped to real API calls during the backend-wiring pass.
+ * DATA SOURCE: Real FastAPI backend via apiClient.ts
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, RefreshCw, ArrowLeft, User2, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus, Search, RefreshCw, ArrowLeft, User2, Loader2, AlertCircle, Trash2 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,10 +22,8 @@ import { Dialog } from '@/components/ui/dialog'
 import {
   formatDateTime, statusClasses, priorityClasses, formatPrice,
 } from '@/lib/formatters'
-import {
-  MOCK_PARTIES, MOCK_LEADS, getMockPartyDetail,
-  type PartyRow, type PartyDetail,
-} from '@/lib/mockData'
+import { apiClient } from '@/lib/apiClient'
+import type { PartyRow, PartyDetail } from '@/lib/mockData'
 
 const PARTY_ROLES = ['OWNER', 'BUYER', 'SELLER', 'TENANT', 'LANDLORD', 'INVESTOR', 'BROKER', 'CONSULTANT'] as const
 
@@ -46,17 +43,28 @@ const ROLE_COLORS: Record<string, string> = {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PartiesPage() {
-  const [parties, setParties] = useState<PartyRow[]>([...MOCK_PARTIES])
+  const [parties, setParties] = useState<PartyRow[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
 
+  // Loading & error states
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
   // Detail view
   const [detail, setDetail] = useState<PartyDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [detailTab, setDetailTab] = useState<'leads' | 'requirements' | 'opportunities'>('leads')
 
   // Create dialog
   const [showCreate, setShowCreate] = useState(false)
   const [selectedRoles, setSelectedRoles] = useState<string[]>([])
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Debounce search
   useEffect(() => {
@@ -64,47 +72,73 @@ export default function PartiesPage() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // Filtered view
-  const filtered = useMemo(() => {
-    if (!search) return parties
-    const q = search.toLowerCase()
-    return parties.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.email ?? '').toLowerCase().includes(q) ||
-      p.mobile.includes(q)
-    )
-  }, [parties, search])
+  // ── Fetch parties from API ───────────────────────────────────────────────
+  const fetchParties = useCallback(async (searchQuery?: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (searchQuery) params.set('search', searchQuery)
+      params.set('limit', '200')
+      const url = `/api/parties${params.toString() ? `?${params}` : ''}`
+      const data = await apiClient.get<{ items: PartyRow[]; total: number }>(url)
+      setParties(data.items)
+      setTotalCount(data.total)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load parties'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Fetch on mount and whenever debounced search changes
+  useEffect(() => {
+    fetchParties(search || undefined)
+  }, [search, fetchParties])
 
   // ── Open detail ──────────────────────────────────────────────────────────
-  const openDetail = (partyId: string) => {
-    const d = getMockPartyDetail(partyId)
-    if (d) {
-      setDetail(d)
+  const openDetail = async (partyId: string) => {
+    setDetailLoading(true)
+    setError(null)
+    try {
+      const data = await apiClient.get<PartyDetail>(`/api/parties/${partyId}`)
+      setDetail(data)
       setDetailTab('leads')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load party detail'
+      setError(msg)
+    } finally {
+      setDetailLoading(false)
     }
   }
 
   // ── Create party ─────────────────────────────────────────────────────────
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setCreateLoading(true)
+    setCreateError(null)
     const fd = new FormData(e.currentTarget)
-    const newParty: PartyRow = {
-      id: `p-${Date.now().toString(36)}`,
-      name: fd.get('name') as string,
-      mobile: fd.get('mobile') as string,
-      email: (fd.get('email') as string) || null,
-      city: (fd.get('city') as string) || null,
-      roles: [...selectedRoles],
-      status: 'Active',
-      source: (fd.get('source') as string) || null,
-      leads_count: 0,
-      requirements_count: 0,
-      opportunities_count: 0,
-      updated_at: new Date().toISOString(),
+    try {
+      await apiClient.post('/api/parties', {
+        name: fd.get('name') as string,
+        mobile: fd.get('mobile') as string,
+        email: (fd.get('email') as string) || undefined,
+        city: (fd.get('city') as string) || undefined,
+        roles: [...selectedRoles],
+        source: (fd.get('source') as string) || undefined,
+        status: 'Active',
+      })
+      setShowCreate(false)
+      setSelectedRoles([])
+      // Refresh the list from the backend to show the new party
+      await fetchParties(search || undefined)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create party'
+      setCreateError(msg)
+    } finally {
+      setCreateLoading(false)
     }
-    setParties(prev => [newParty, ...prev])
-    setShowCreate(false)
-    setSelectedRoles([])
   }
 
   const toggleRole = (role: string) => {
@@ -113,7 +147,48 @@ export default function PartiesPage() {
     )
   }
 
+  // ── Delete party ─────────────────────────────────────────────────────────
+  const handleDelete = async (partyId: string, partyName: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (!confirm(`Are you sure you want to delete ${partyName}?`)) return
+
+    setDeletingId(partyId)
+    setError(null)
+    try {
+      await apiClient.delete(`/api/parties/${partyId}`)
+      if (detail?.party.id === partyId) {
+        setDetail(null)
+      }
+      await fetchParties(search || undefined)
+    } catch (err: unknown) {
+      let msg = err instanceof Error ? err.message : 'Failed to delete party'
+      try {
+        const jsonStart = msg.indexOf('{')
+        if (jsonStart !== -1) {
+          const parsed = JSON.parse(msg.slice(jsonStart))
+          if (parsed.detail) msg = parsed.detail
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+      setError(msg)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   // ── Detail view ─────────────────────────────────────────────────────────
+  if (detailLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-64 text-slate-400">
+          <Loader2 size={24} className="animate-spin mr-2" />
+          Loading party details…
+        </div>
+      </AppLayout>
+    )
+  }
+
   if (detail) {
     const p = detail.party
     return (
@@ -122,6 +197,15 @@ export default function PartiesPage() {
           <button onClick={() => setDetail(null)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors">
             <ArrowLeft size={16} /> Back to Parties
           </button>
+
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">✕</button>
+            </div>
+          )}
 
           {/* Party header card */}
           <Card>
@@ -137,12 +221,24 @@ export default function PartiesPage() {
                     {p.city && <p className="text-xs text-slate-400 mt-0.5">{p.city}</p>}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {(p.roles || []).map(r => (
-                    <span key={r} className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[r] || 'bg-slate-100 text-slate-600'}`}>
-                      {r}
-                    </span>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(p.roles || []).map(r => (
+                      <span key={r} className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[r] || 'bg-slate-100 text-slate-600'}`}>
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 ml-2"
+                    disabled={deletingId === p.id}
+                    onClick={() => handleDelete(p.id, p.name)}
+                  >
+                    {deletingId === p.id ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Trash2 size={14} className="mr-1.5" />}
+                    Delete
+                  </Button>
                 </div>
               </div>
               {p.remarks && <p className="text-sm text-slate-500 mt-3 border-t border-slate-100 pt-3">{p.remarks}</p>}
@@ -254,9 +350,7 @@ export default function PartiesPage() {
                       <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                         <th className="px-5 py-3">ID</th>
                         <th className="px-3 py-3">Stage</th>
-                        <th className="px-3 py-3">Role</th>
                         <th className="px-3 py-3 text-right">Value</th>
-                        <th className="px-3 py-3 text-right">Commission</th>
                         <th className="px-3 py-3 text-right">Probability</th>
                       </tr>
                     </thead>
@@ -267,9 +361,7 @@ export default function PartiesPage() {
                           <td className="px-3 py-3">
                             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusClasses(o.stage)}`}>{o.stage}</span>
                           </td>
-                          <td className="px-3 py-3 text-slate-600">{o.role}</td>
                           <td className="px-3 py-3 text-right text-slate-700">{o.expected_value ? formatPrice(o.expected_value) : '—'}</td>
-                          <td className="px-3 py-3 text-right text-slate-600">{o.expected_commission ? formatPrice(o.expected_commission) : '—'}</td>
                           <td className="px-3 py-3 text-right text-slate-600">{o.probability ? `${o.probability}%` : '—'}</td>
                         </tr>
                       ))}
@@ -292,12 +384,21 @@ export default function PartiesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Parties</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{filtered.length} contacts</p>
+            <p className="text-sm text-slate-500 mt-0.5">{totalCount} contacts</p>
           </div>
-          <Button onClick={() => { setShowCreate(true); setSelectedRoles([]) }}>
+          <Button onClick={() => { setShowCreate(true); setSelectedRoles([]); setCreateError(null) }}>
             <Plus size={16} className="mr-1.5" /> New Party
           </Button>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">✕</button>
+          </div>
+        )}
 
         {/* Search */}
         <Card>
@@ -312,7 +413,7 @@ export default function PartiesPage() {
                 className="bg-transparent text-sm outline-none w-full placeholder:text-slate-400"
               />
             </div>
-            <button onClick={() => setSearchInput('')} className="p-2 text-slate-500 hover:text-slate-800 transition-colors" title="Clear">
+            <button onClick={() => { setSearchInput(''); fetchParties() }} className="p-2 text-slate-500 hover:text-slate-800 transition-colors" title="Clear & refresh">
               <RefreshCw size={16} />
             </button>
           </CardContent>
@@ -321,7 +422,12 @@ export default function PartiesPage() {
         {/* Table */}
         <Card>
           <CardContent className="p-0">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+                <Loader2 size={20} className="animate-spin mr-2" />
+                Loading parties…
+              </div>
+            ) : parties.length === 0 ? (
               <div className="text-center py-16 text-slate-400 text-sm">
                 No parties found. Click &quot;+ New Party&quot; to add a contact.
               </div>
@@ -341,7 +447,7 @@ export default function PartiesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((p, i) => (
+                    {parties.map((p, i) => (
                       <tr key={p.id}
                         className={`border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`}
                         onClick={() => openDetail(p.id)}>
@@ -370,9 +476,21 @@ export default function PartiesPage() {
                         </td>
                         <td className="px-3 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDateTime(p.updated_at)}</td>
                         <td className="px-3 py-3">
-                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(p.id) }}>
-                            View
-                          </Button>
+                          <div className="flex items-center gap-1.5">
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(p.id) }}>
+                              View
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 h-8 w-8"
+                              disabled={deletingId === p.id}
+                              onClick={(e) => handleDelete(p.id, p.name, e)}
+                              title="Delete Party"
+                            >
+                              {deletingId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -439,9 +557,20 @@ export default function PartiesPage() {
               <Textarea name="remarks" id="remarks" placeholder="Optional notes…" className="mt-1" rows={2} />
             </div>
 
+            {/* Create error banner */}
+            {createError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{createError}</span>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button type="submit">Create Party</Button>
+              <Button type="submit" disabled={createLoading}>
+                {createLoading && <Loader2 size={14} className="animate-spin mr-1.5" />}
+                Create Party
+              </Button>
             </div>
           </form>
         </Dialog>
