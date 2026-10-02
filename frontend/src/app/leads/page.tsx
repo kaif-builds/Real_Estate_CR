@@ -38,10 +38,10 @@ import {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STATUSES   = ['', 'ACTIVE', 'NEW', 'CONTACTED', 'QUALIFIED', 'LOST'] as const
-const TYPES      = ['', 'BUYER', 'SELLER', 'TENANT', 'LANDLORD', 'INVESTOR', 'CONSULTANT'] as const
-const PRIORITIES = ['', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
-const CHANNELS   = ['', 'Digital', 'Offline'] as const
+const LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'LOST', 'WON', 'STALE', 'CLOSED'] as const
+const TYPES         = ['', 'BUYER', 'SELLER', 'TENANT', 'LANDLORD', 'INVESTOR', 'CONSULTANT'] as const
+const PRIORITIES    = ['', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
+const CHANNELS      = ['', 'Digital', 'Offline'] as const
 
 // ── Error Helper ─────────────────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ function LeadsContent() {
     let items = leads
     if (fStatus) {
       if (fStatus === 'ACTIVE') {
-        items = items.filter(l => l.status !== 'LOST' && l.status !== 'Lost')
+        items = items.filter(l => l.status !== 'LOST' && l.status !== 'WON' && l.status !== 'CLOSED')
       } else {
         items = items.filter(l => l.status === fStatus)
       }
@@ -264,7 +264,7 @@ function LeadsContent() {
   }, [leads])
 
   // ── Delete lead (Real Backend DELETE /api/leads/{id}) ──────────────────────
-  const handleDelete = async (id: string, partyName: string) => {
+  const handleDelete = useCallback(async (id: string, partyName: string) => {
     if (!confirm(`Are you sure you want to delete lead ${id} for ${partyName}?`)) return
     setDeletingId(id)
     setError(null)
@@ -278,7 +278,7 @@ function LeadsContent() {
     } finally {
       setDeletingId(null)
     }
-  }
+  }, [fetchLeads])
 
   // ── Column definitions ──────────────────────────────────────────────────
   const columns: ColumnDef<LeadRow>[] = useMemo(() => [
@@ -428,7 +428,7 @@ function LeadsContent() {
             onChange={e => patchStatus(r.id, e.target.value)}
             className="h-7 text-xs px-2 w-auto min-w-[95px]"
           >
-            {STATUSES.filter(Boolean).map(s => (
+            {LEAD_STATUSES.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </Select>
@@ -448,7 +448,7 @@ function LeadsContent() {
         </div>
       ),
     },
-  ], [patchStatus, deletingId])
+  ], [patchStatus, deletingId, handleDelete])
 
   return (
     <AppLayout>
@@ -458,7 +458,7 @@ function LeadsContent() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              {loading ? 'Loading…' : `${totalCount} active leads`} · Manage and track your sales pipeline leads and acquisition channels
+              {loading ? 'Loading…' : `${totalCount} leads`} · Manage and track your sales pipeline leads and acquisition channels
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -540,7 +540,7 @@ function LeadsContent() {
                   <Select value={fStatus} onChange={e => setFStatus(e.target.value)} className="h-8 text-sm min-w-[110px]">
                     <option value="">All Status</option>
                     <option value="ACTIVE">Active (All)</option>
-                    {STATUSES.filter(s => Boolean(s) && s !== 'ACTIVE').map(s => <option key={s} value={s}>{s}</option>)}
+                    {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                   </Select>
 
                   {/* Type Filter */}
