@@ -745,6 +745,7 @@ export interface PropertyRow {
   created_at: string
   lat?: number
   lng?: number
+  is_stale?: boolean
 }
 
 // ── Distance Calculation Helper (Haversine formula in metres) ─────────────────
