@@ -101,6 +101,9 @@ function LeadsContent() {
   const [parties, setParties] = useState<PartyRow[]>([])
   const [partiesLoading, setPartiesLoading] = useState(false)
 
+  // Active agents for assignment picker
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([])
+
   // Page-specific filters (search handled by DataTable)
   const [fStatus, setFStatus]     = useState(initialStatus)
   const [fType, setFType]         = useState('')
@@ -156,10 +159,23 @@ function LeadsContent() {
     }
   }, [])
 
+  // ── Fetch Active Agents for Assignment ──────────────────────────────────────
+  const fetchAgents = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ items: { id: string; name: string }[]; total: number }>(
+        '/api/users?role=AGENT&active=true&limit=100'
+      )
+      setAgents(data.items || [])
+    } catch {
+      // Non-critical: form fallback
+    }
+  }, [])
+
   useEffect(() => {
     fetchLeads()
     fetchParties()
-  }, [fetchLeads, fetchParties])
+    fetchAgents()
+  }, [fetchLeads, fetchParties, fetchAgents])
 
   // Handle Channel Type toggle in "+ New Lead" modal
   const handleChannelTypeChange = (type: ChannelType) => {
@@ -206,6 +222,7 @@ function LeadsContent() {
     const fd = new FormData(e.currentTarget)
     const partyId = fd.get('party_id') as string
     const enquiryAtInput = fd.get('enquiry_at') as string
+    const assignedToVal = fd.get('assigned_to_id') as string
 
     const payload = {
       party_id: partyId,
@@ -214,7 +231,7 @@ function LeadsContent() {
       lead_type: fd.get('lead_type') as string,
       status: 'NEW',
       priority: (fd.get('priority') as string) || 'MEDIUM',
-      assigned_to_id: null, // Decision 1: Always send null until User Management is live
+      assigned_to_id: assignedToVal ? assignedToVal : null,
       value: fd.get('value') ? parseFloat(fd.get('value') as string) : null,
       remarks: (fd.get('remarks') as string) || null,
       campaign_id: null, // Decision 4: Send null until Marketing is live
@@ -764,8 +781,13 @@ function LeadsContent() {
               </div>
               <div>
                 <Label htmlFor="assigned_to_id">Assigned To</Label>
-                <Select name="assigned_to_id" id="assigned_to_id" disabled className="mt-1 bg-slate-100 text-slate-500 cursor-not-allowed">
-                  <option value="">Unassigned (Agent assignment will be available once User Management is live)</option>
+                <Select name="assigned_to_id" id="assigned_to_id" className="mt-1">
+                  <option value="">Unassigned</option>
+                  {agents.map((ag) => (
+                    <option key={ag.id} value={ag.id}>
+                      {ag.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
             </div>

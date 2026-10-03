@@ -203,6 +203,9 @@ function RequirementsContent() {
   const [parties, setParties] = useState<PartyRow[]>([])
   const [partiesLoading, setPartiesLoading] = useState(false)
 
+  // Active agents for assignment picker
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([])
+
   // View & Edit mode state
   const [view, setView] = useState<'list' | 'add'>('list')
   const [editingReqId, setEditingReqId] = useState<string | null>(null)
@@ -227,6 +230,7 @@ function RequirementsContent() {
   // Form State
   const [formClientId, setFormClientId] = useState('')
   const [clientSearch, setClientSearch] = useState('')
+  const [formAssignedToId, setFormAssignedToId] = useState('')
   const [formCategory, setFormCategory] = useState('RENTAL_RESIDENTIAL')
   const [formIntent, setFormIntent] = useState<'BUY' | 'RENT' | 'LEASE'>('RENT')
   const [formStatus, setFormStatus] = useState('NEW')
@@ -297,6 +301,19 @@ function RequirementsContent() {
     }
   }, [])
 
+  // ── Fetch Active Agents for Assignment Picker ──────────────────────────────
+
+  const fetchAgents = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ items: { id: string; name: string }[]; total: number }>(
+        '/api/users?role=AGENT&active=true&limit=100'
+      )
+      setAgents(data.items || [])
+    } catch {
+      // Non-critical fallback
+    }
+  }, [])
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchRequirements()
@@ -306,7 +323,8 @@ function RequirementsContent() {
 
   useEffect(() => {
     fetchParties()
-  }, [fetchParties])
+    fetchAgents()
+  }, [fetchParties, fetchAgents])
 
   // ── Filtered Client Parties for Searchable Dropdown ─────────────────────────
 
@@ -363,6 +381,7 @@ function RequirementsContent() {
     setEditingReqId(null)
     setFormClientId('')
     setClientSearch('')
+    setFormAssignedToId('')
     setFormCategory('RENTAL_RESIDENTIAL')
     setFormIntent('RENT')
     setFormStatus('NEW')
@@ -393,6 +412,7 @@ function RequirementsContent() {
     setEditingReqId(req.id)
     setFormClientId(req.client_id)
     setClientSearch('')
+    setFormAssignedToId(req.assigned_to_id || '')
     setFormCategory(req.category)
     setFormIntent(req.intent)
     setFormStatus(req.status)
@@ -475,7 +495,7 @@ function RequirementsContent() {
       timeline: formTimeline || null,
       facilities: formFacilities,
       remarks: formRemarks.trim() || null,
-      assigned_to_id: null,
+      assigned_to_id: formAssignedToId.trim() ? formAssignedToId.trim() : null,
     }
 
     try {
@@ -1240,25 +1260,24 @@ function RequirementsContent() {
                             />
                           </div>
 
-                          {/* Assigned Staff (Disabled with note) */}
+                          {/* Assigned Staff */}
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="assigned_to" className="text-xs font-semibold text-slate-700">
-                                Assigned Staff
-                              </Label>
-                              <span className="text-[10px] text-slate-400 italic">Coming soon</span>
-                            </div>
+                            <Label htmlFor="assigned_to" className="text-xs font-semibold text-slate-700">
+                              Assigned Staff
+                            </Label>
                             <Select
                               id="assigned_to"
-                              value=""
-                              disabled
-                              className="h-10 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                              value={formAssignedToId}
+                              onChange={(e) => setFormAssignedToId(e.target.value)}
+                              className="h-10 text-sm"
                             >
                               <option value="">Unassigned</option>
+                              {agents.map((ag) => (
+                                <option key={ag.id} value={ag.id}>
+                                  {ag.name}
+                                </option>
+                              ))}
                             </Select>
-                            <p className="text-[11px] text-slate-400">
-                              Agent assignment will be available once User Management is live
-                            </p>
                           </div>
                         </div>
                       </div>
