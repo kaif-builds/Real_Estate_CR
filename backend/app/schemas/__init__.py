@@ -141,6 +141,7 @@ class PropertyUpdate(BaseModel):
     source: Optional[str] = None
     availability_date: Optional[str] = None
     details_json: Optional[dict[str, Any]] = None
+    last_verified_at: Optional[str | datetime] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
 
