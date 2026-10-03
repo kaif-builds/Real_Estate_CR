@@ -373,9 +373,9 @@ function MatchingContent() {
     const newVisit: VisitRow = {
       id: `V-${Date.now().toString().slice(-4)}`,
       property_id: schedulingMatch.property_id,
-      property_short_loc: schedulingMatch.short_loc,
+      property_short_loc: schedulingMatch.short_loc ?? '',
       client_id: req?.client_id || undefined,
-      client_name: schedulingMatch.client_name,
+      client_name: schedulingMatch.client_name ?? '',
       agent_id: visitAgent,
       agent_name: agent?.name || 'Unassigned',
       purpose: visitPurpose,
