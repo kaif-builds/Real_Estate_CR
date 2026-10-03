@@ -5,7 +5,7 @@ Field names and types match the frontend's Row interfaces exactly.
 
 from datetime import datetime, date
 from typing import Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -130,6 +130,13 @@ class PropertyCreate(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
 
+    @field_validator("price")
+    @classmethod
+    def validate_price(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("Price must be greater than 0")
+        return v
+
 
 class PropertyUpdate(BaseModel):
     category: Optional[str] = None
@@ -144,6 +151,13 @@ class PropertyUpdate(BaseModel):
     last_verified_at: Optional[str | datetime] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+
+    @field_validator("price")
+    @classmethod
+    def validate_price(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("Price must be greater than 0")
+        return v
 
 
 class PropertyResponse(BaseModel):

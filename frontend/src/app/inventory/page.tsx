@@ -123,6 +123,14 @@ const STATUS_ALL_OPTIONS = PROPERTY_STATUSES
 
 const SOURCE_OPTIONS = ['Owner', 'Broker', 'Builder-Marketing'] as const
 
+const VALID_SOURCES: Record<string, string> = {
+  'owner': 'Owner',
+  'broker': 'Broker',
+  'builder-marketing': 'Builder-Marketing',
+  'builder marketing': 'Builder-Marketing',
+  'buildermarketing': 'Builder-Marketing',
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseApiError(err: unknown, defaultMsg: string): { status?: number; message: string; isForbidden?: boolean } {
@@ -457,12 +465,31 @@ function InventoryContent() {
           }
 
           // Required: Price/Rent
-          const priceRaw = raw('Price/Rent').replace(/[^0-9.]/g, '')
-          const price = parseFloat(priceRaw)
-          if (!raw('Price/Rent')) {
+          const rawPriceVal = raw('Price/Rent')
+          const cleanPriceStr = rawPriceVal.replace(/,/g, '').trim()
+          const priceNum = Number(cleanPriceStr)
+          if (!rawPriceVal) {
             errors.push({ row: rowIndex, field: 'Price/Rent', message: 'Price/Rent is required' })
-          } else if (isNaN(price) || price <= 0) {
-            errors.push({ row: rowIndex, field: 'Price/Rent', message: `Price must be a positive number: "${raw('Price/Rent')}"` })
+          } else if (isNaN(priceNum) || !/^-?\d+(\.\d+)?$/.test(cleanPriceStr)) {
+            errors.push({ row: rowIndex, field: 'Price/Rent', message: `Price must be a valid number: "${rawPriceVal}"` })
+          } else if (priceNum <= 0) {
+            errors.push({ row: rowIndex, field: 'Price/Rent', message: `Price must be greater than 0: "${rawPriceVal}"` })
+          }
+
+          // Optional: Source (defaults to Owner if blank; if provided must be one of Owner, Broker, Builder-Marketing)
+          const rawSource = raw('Source')
+          let resolvedSource = 'Owner'
+          if (rawSource) {
+            const normalizedSource = VALID_SOURCES[rawSource.toLowerCase()]
+            if (!normalizedSource) {
+              errors.push({
+                row: rowIndex,
+                field: 'Source',
+                message: `Invalid source: "${rawSource}". Must be one of: Owner, Broker, Builder-Marketing`,
+              })
+            } else {
+              resolvedSource = normalizedSource
+            }
           }
 
           let property: PropertyRow | null = null
@@ -496,11 +523,11 @@ function InventoryContent() {
               category,
               short_loc: shortLoc,
               address: raw('Address') || null,
-              price: price || 0,
+              price: priceNum,
               status: rawStatus,
               owner_id: parties[0]?.id || 'p4',
               owner_name: parties[0]?.name || 'Owner',
-              source: raw('Source') || 'Owner',
+              source: resolvedSource,
               availability_date: raw('Availability Date') || 'Immediate',
               details_json: Object.keys(detailsJson).length > 0 ? detailsJson : null,
               last_verified_at: new Date().toISOString(),
@@ -711,6 +738,14 @@ function InventoryContent() {
     setIsSaving(true)
     setError(null)
 
+    const cleanPrice = formPrice.replace(/,/g, '').trim()
+    const numericPrice = Number(cleanPrice)
+    if (!formPrice.trim() || isNaN(numericPrice) || numericPrice <= 0) {
+      setError('Price must be greater than 0')
+      setIsSaving(false)
+      return
+    }
+
     let detailsJson: Record<string, unknown> = {}
 
     if (formCategory === 'RENTAL_RESIDENTIAL' || formCategory === 'BUY_SELL_FLAT') {
@@ -743,7 +778,7 @@ function InventoryContent() {
       category: formCategory,
       short_loc: formShortLoc.trim() || '01-Schm140_Mayank',
       address: formAddress.trim() || null,
-      price: parseFloat(formPrice) || 0,
+      price: numericPrice,
       status: formStatus,
       owner_id: formOwnerId || (parties[0]?.id || 'p4'),
       source: formSource,
@@ -1255,6 +1290,7 @@ function InventoryContent() {
                           id="price"
                           type="number"
                           step="any"
+                          min="0.01"
                           value={formPrice}
                           onChange={(e) => setFormPrice(e.target.value)}
                           placeholder="e.g. 25000 or 5500000"
@@ -1964,15 +2000,19 @@ function InventoryContent() {
                                   {row.data['Address'] || '—'}
                                 </td>
                                 <td className="py-2.5 px-3 text-xs text-right font-medium text-slate-700">
-                                  {row.data['Price/Rent'] || '—'}
+                                  <span className={hasErrors && row.errors.some(e => e.field === 'Price/Rent') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-700'}>
+                                    {row.data['Price/Rent'] || '—'}
+                                  </span>
                                 </td>
                                 <td className="py-2.5 px-3 text-xs">
                                   <span className={hasErrors && row.errors.some(e => e.field === 'Status') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-600'}>
                                     {row.data['Status'] || '—'}
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3 text-xs text-slate-600">
-                                  {row.data['Source'] || '—'}
+                                <td className="py-2.5 px-3 text-xs">
+                                  <span className={hasErrors && row.errors.some(e => e.field === 'Source') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-600'}>
+                                    {row.data['Source'] || '—'}
+                                  </span>
                                 </td>
                                 <td className="py-2.5 px-3 text-xs">
                                   {hasErrors ? (
