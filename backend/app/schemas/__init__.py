@@ -5,7 +5,7 @@ Field names and types match the frontend's Row interfaces exactly.
 
 from datetime import datetime, date
 from typing import Optional, Any
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -199,8 +199,30 @@ class RequirementCreate(BaseModel):
     remarks: Optional[str] = None
     assigned_to_id: Optional[str] = None
 
+    @field_validator("min_budget")
+    @classmethod
+    def validate_min_budget(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("Min budget must be greater than 0")
+        return v
+
+    @field_validator("max_budget")
+    @classmethod
+    def validate_max_budget(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("Max budget must be greater than 0")
+        return v
+
+    @model_validator(mode="after")
+    def validate_budget_range(self) -> "RequirementCreate":
+        if self.min_budget is not None and self.max_budget is not None:
+            if self.min_budget > self.max_budget:
+                raise ValueError("Min budget cannot be greater than max budget")
+        return self
+
 
 class RequirementUpdate(BaseModel):
+    client_id: Optional[str] = None
     category: Optional[str] = None
     intent: Optional[str] = None
     preferred_short_locs: Optional[list[str]] = None
@@ -214,6 +236,27 @@ class RequirementUpdate(BaseModel):
     status: Optional[str] = None
     remarks: Optional[str] = None
     assigned_to_id: Optional[str] = None
+
+    @field_validator("min_budget")
+    @classmethod
+    def validate_min_budget(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("Min budget must be greater than 0")
+        return v
+
+    @field_validator("max_budget")
+    @classmethod
+    def validate_max_budget(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("Max budget must be greater than 0")
+        return v
+
+    @model_validator(mode="after")
+    def validate_budget_range(self) -> "RequirementUpdate":
+        if self.min_budget is not None and self.max_budget is not None:
+            if self.min_budget > self.max_budget:
+                raise ValueError("Min budget cannot be greater than max budget")
+        return self
 
 
 class RequirementResponse(BaseModel):
@@ -235,6 +278,7 @@ class RequirementResponse(BaseModel):
     facilities: Optional[list[str]] = []
     status: str
     remarks: Optional[str] = None
+    match_count: int = 0
     created_at: Optional[str] = None
 
 
