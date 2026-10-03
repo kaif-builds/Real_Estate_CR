@@ -146,9 +146,15 @@ function parseApiError(err: unknown, defaultMsg: string): { status?: number; mes
       const parsed = JSON.parse(raw.slice(jsonStart))
       if (parsed.detail) {
         if (typeof parsed.detail === 'string') {
-          detail = parsed.detail
+          detail = parsed.detail.replace(/^Value error,\s*/i, '')
         } else if (Array.isArray(parsed.detail)) {
-          detail = parsed.detail.map((d: any) => `${d.loc?.slice(-1)[0] || 'field'}: ${d.msg}`).join(', ')
+          detail = parsed.detail
+            .map((d: any) => {
+              const field = d.loc?.slice(-1)[0] || 'field'
+              const msg = (d.msg || '').replace(/^Value error,\s*/i, '')
+              return `${field}: ${msg}`
+            })
+            .join(', ')
         }
       }
     }
@@ -179,6 +185,15 @@ function formatAvailabilityDate(avail: string | null | undefined): string {
     return trimmed
   }
   return formatDate(trimmed)
+}
+
+function normalizeMobile(val: string | null | undefined): string {
+  if (!val) return ''
+  let s = String(val).trim().replace(/[\s\-\(\)\.]/g, '')
+  if (s.startsWith('+91')) s = s.slice(3)
+  else if (s.startsWith('91') && s.length > 10) s = s.slice(2)
+  else if (s.startsWith('0') && s.length > 10) s = s.slice(1)
+  return s
 }
 
 // ── Distinct ShortLoc Badge ───────────────────────────────────────────────────
@@ -276,6 +291,7 @@ function InventoryContent() {
     rowIndex: number
     data: Record<string, string>
     property: PropertyRow | null
+    resolvedOwnerName?: string
     errors: UploadRowError[]
   }
 
@@ -306,39 +322,39 @@ function InventoryContent() {
 
   // ── Fetch Parties for Owner Picker ──────────────────────────────────────────
 
+  // ── Fetch Parties for Owner Picker ──────────────────────────────────────────
+
   const fetchParties = useCallback(async () => {
     setPartiesLoading(true)
     try {
-      const data = await apiClient.get<{ items: PartyRow[]; total: number }>('/api/parties?limit=200')
-      const items = data.items || []
-      setParties(items)
-      if (items.length > 0 && !formOwnerId) {
-        setFormOwnerId(items[0].id)
-      }
+      let all: PartyRow[] = []
+      let offset = 0
+      const limit = 200
+      let total = 0
+      do {
+        const data = await apiClient.get<{ items: PartyRow[]; total: number }>(`/api/parties?limit=${limit}&offset=${offset}`)
+        all = all.concat(data.items || [])
+        total = data.total || 0
+        offset += limit
+      } while (all.length < total && offset < 5000)
+      setParties(all)
     } catch {
       // Non-critical fallback
     } finally {
       setPartiesLoading(false)
     }
-  }, [formOwnerId])
+  }, [])
 
   useEffect(() => {
     fetchProperties()
     fetchParties()
   }, [fetchProperties, fetchParties])
 
-  // Initialize formOwnerId once parties arrive if not set
-  useEffect(() => {
-    if (parties.length > 0 && (!formOwnerId || formOwnerId === 'p1')) {
-      setFormOwnerId(parties[0].id)
-    }
-  }, [parties, formOwnerId])
-
   // ── Download Template ─────────────────────────────────────────────────────
 
   const handleDownloadTemplate = useCallback(() => {
     const headers = [
-      'Category', 'ShortLoc', 'Address', 'Price/Rent', 'Source',
+      'Category', 'ShortLoc', 'Address', 'Price/Rent', 'Source', 'Owner Mobile',
       'Availability Date', 'Status',
       // Residential / Flat
       'BHK', 'Furnishing', 'Built-up Area', 'Floor', 'Parking',
@@ -350,7 +366,7 @@ function InventoryContent() {
 
     const sampleRow = [
       'RENTAL_RESIDENTIAL', '01-Schm140_Mayank', 'Flat 101, Heights, Scheme 140, Indore',
-      '25000', 'Owner', 'Immediate', 'AVAILABLE',
+      '25000', 'Owner', '+91 9876543213', 'Immediate', 'AVAILABLE',
       // residential fields
       '2 BHK', 'Semi-Furnished', '1100', '2nd', '1 Covered',
       '', '', '', '', '', // commercial fields blank
@@ -361,7 +377,7 @@ function InventoryContent() {
     const ws = XLSX.utils.aoa_to_sheet(wsData)
 
     ws['!cols'] = [
-      { wch: 22 }, { wch: 20 }, { wch: 35 }, { wch: 12 }, { wch: 12 },
+      { wch: 22 }, { wch: 20 }, { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 16 },
       { wch: 16 }, { wch: 14 },
       { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 12 },
       { wch: 14 }, { wch: 8 }, { wch: 16 }, { wch: 10 }, { wch: 8 },
@@ -374,10 +390,11 @@ function InventoryContent() {
       ['How to use this template:'],
       ['1. The "Properties" sheet contains headers and a sample row.'],
       ['2. Add your property rows below the sample row, or replace the sample.'],
-      ['3. Required fields: Category, ShortLoc, Price/Rent, Status.'],
+      ['3. Required fields: Category, ShortLoc, Price/Rent, Owner Mobile, Status.'],
       ['4. ShortLoc must be a valid hyperlocal key (e.g. 01-Schm140_Mayank).'],
       ['5. Price/Rent must be a positive number.'],
-      ['6. Save as .xlsx and upload using the "Upload Excel" button.'],
+      ['6. Owner Mobile: the mobile number of the owner exactly as saved in Parties. The owner must already exist in Parties.'],
+      ['7. Save as .xlsx and upload using the "Upload Excel" button.'],
       [''],
       ['Valid Category values:'],
       ['  RENTAL_RESIDENTIAL, RENTAL_COMMERCIAL, BUY_SELL_FLAT, BUY_SELL_COMMERCIAL, PLOT'],
@@ -396,7 +413,7 @@ function InventoryContent() {
       ['Leave category-specific fields blank for non-applicable categories.'],
     ]
     const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData)
-    wsInstructions['!cols'] = [{ wch: 80 }]
+    wsInstructions['!cols'] = [{ wch: 85 }]
 
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, wsInstructions, 'Instructions')
@@ -492,9 +509,34 @@ function InventoryContent() {
             }
           }
 
+          // Required: Owner Mobile (must match a unique party in Parties directory)
+          const rawMobile = raw('Owner Mobile')
+          let resolvedOwner: PartyRow | null = null
+          if (!rawMobile) {
+            errors.push({ row: rowIndex, field: 'Owner Mobile', message: 'Owner Mobile is required' })
+          } else {
+            const norm = normalizeMobile(rawMobile)
+            const matches = parties.filter((p) => normalizeMobile(p.mobile) === norm)
+            if (matches.length === 0) {
+              errors.push({
+                row: rowIndex,
+                field: 'Owner Mobile',
+                message: `Owner not found for mobile ${rawMobile}. Add them in Parties first`,
+              })
+            } else if (matches.length > 1) {
+              errors.push({
+                row: rowIndex,
+                field: 'Owner Mobile',
+                message: `More than one party has this mobile (${rawMobile}), do not guess`,
+              })
+            } else {
+              resolvedOwner = matches[0]
+            }
+          }
+
           let property: PropertyRow | null = null
 
-          if (errors.length === 0 && resolvedCategory) {
+          if (errors.length === 0 && resolvedCategory && resolvedOwner) {
             const category = resolvedCategory
             const detailsJson: Record<string, unknown> = {}
 
@@ -525,8 +567,8 @@ function InventoryContent() {
               address: raw('Address') || null,
               price: priceNum,
               status: rawStatus,
-              owner_id: parties[0]?.id || 'p4',
-              owner_name: parties[0]?.name || 'Owner',
+              owner_id: resolvedOwner.id,
+              owner_name: resolvedOwner.name,
               source: resolvedSource,
               availability_date: raw('Availability Date') || 'Immediate',
               details_json: Object.keys(detailsJson).length > 0 ? detailsJson : null,
@@ -539,6 +581,7 @@ function InventoryContent() {
             rowIndex,
             data: data as Record<string, string>,
             property,
+            resolvedOwnerName: resolvedOwner?.name,
             errors,
           })
         })
@@ -566,18 +609,16 @@ function InventoryContent() {
     let failureCount = 0
     const failureMessages: string[] = []
 
-    const fallbackOwnerId = parties[0]?.id || 'p4'
-
     for (const row of validRows) {
-      if (!row.property) continue
+      if (!row.property || !row.property.owner_id) continue
       const prop = row.property
       const payload = {
         category: prop.category,
         short_loc: prop.short_loc,
         address: prop.address || null,
-        price: prop.price || 0,
+        price: prop.price,
         status: prop.status || 'NEW',
-        owner_id: (prop.owner_id && prop.owner_id !== 'p1') ? prop.owner_id : fallbackOwnerId,
+        owner_id: prop.owner_id,
         source: prop.source || 'Owner',
         availability_date: prop.availability_date || 'Immediate',
         details_json: prop.details_json,
@@ -602,7 +643,7 @@ function InventoryContent() {
     } else {
       setError(null)
     }
-  }, [validRows, parties, fetchProperties])
+  }, [validRows, fetchProperties])
 
   // ── Filter Logic (category/status only — search is handled by DataTable) ──
 
@@ -679,7 +720,7 @@ function InventoryContent() {
     setFormSource('Owner')
     setFormAvailabilityDate('Immediate')
     setFormStatus('NEW')
-    setFormOwnerId(parties[0]?.id || '')
+    setFormOwnerId('')
     setFormBhk('2 BHK')
     setFormFurnishing('Semi-Furnished')
     setFormResArea('1100')
@@ -706,7 +747,7 @@ function InventoryContent() {
     setFormSource(prop.source || 'Owner')
     setFormAvailabilityDate(prop.availability_date || 'Immediate')
     setFormStatus(prop.status || 'NEW')
-    setFormOwnerId(prop.owner_id || (parties[0]?.id || ''))
+    setFormOwnerId(prop.owner_id || '')
 
     const dj = (prop.details_json || {}) as Record<string, any>
     if (prop.category === 'RENTAL_RESIDENTIAL' || prop.category === 'BUY_SELL_FLAT') {
@@ -746,6 +787,12 @@ function InventoryContent() {
       return
     }
 
+    if (!formOwnerId.trim()) {
+      setError('Please select an owner for this property')
+      setIsSaving(false)
+      return
+    }
+
     let detailsJson: Record<string, unknown> = {}
 
     if (formCategory === 'RENTAL_RESIDENTIAL' || formCategory === 'BUY_SELL_FLAT') {
@@ -780,7 +827,7 @@ function InventoryContent() {
       address: formAddress.trim() || null,
       price: numericPrice,
       status: formStatus,
-      owner_id: formOwnerId || (parties[0]?.id || 'p4'),
+      owner_id: formOwnerId,
       source: formSource,
       availability_date: formAvailabilityDate.trim() || null,
       details_json: detailsJson,
@@ -1224,7 +1271,7 @@ function InventoryContent() {
               </CardHeader>
 
               <CardContent className="pt-6">
-                <form id="add-property-form" onSubmit={handleSaveProperty} className="space-y-8">
+                <form id="add-property-form" noValidate onSubmit={handleSaveProperty} className="space-y-8">
                   {/* ───────────────────────────────────────────────────────── */}
                   {/* SECTION 1: COMMON LISTING FIELDS                          */}
                   {/* ───────────────────────────────────────────────────────── */}
@@ -1381,8 +1428,9 @@ function InventoryContent() {
                           className="h-10 text-sm"
                           required
                         >
-                          {partiesLoading && <option value="">Loading parties…</option>}
-                          {!partiesLoading && parties.length === 0 && <option value="">No parties found</option>}
+                          <option value="">— Select an Owner (Required) —</option>
+                          {partiesLoading && <option value="" disabled>Loading parties…</option>}
+                          {!partiesLoading && parties.length === 0 && <option value="" disabled>No parties found</option>}
                           {parties.map((party) => (
                             <option key={party.id} value={party.id}>
                               {party.name} {party.mobile ? `(${party.mobile})` : ''}
@@ -1958,6 +2006,7 @@ function InventoryContent() {
                             <th className="py-2.5 px-3">Category</th>
                             <th className="py-2.5 px-3">ShortLoc</th>
                             <th className="py-2.5 px-3">Address</th>
+                            <th className="py-2.5 px-3">Owner</th>
                             <th className="py-2.5 px-3 text-right">Price/Rent</th>
                             <th className="py-2.5 px-3">Status</th>
                             <th className="py-2.5 px-3">Source</th>
@@ -1998,6 +2047,17 @@ function InventoryContent() {
                                 </td>
                                 <td className="py-2.5 px-3 text-xs text-slate-600 truncate max-w-[180px]">
                                   {row.data['Address'] || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-xs">
+                                  {row.resolvedOwnerName ? (
+                                    <span className="font-medium text-slate-800">
+                                      {row.resolvedOwnerName}
+                                    </span>
+                                  ) : (
+                                    <span className="text-red-700 underline decoration-wavy decoration-red-400">
+                                      {row.data['Owner Mobile'] ? `Unresolved (${row.data['Owner Mobile']})` : 'Missing Owner'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-3 text-xs text-right font-medium text-slate-700">
                                   <span className={hasErrors && row.errors.some(e => e.field === 'Price/Rent') ? 'text-red-700 underline decoration-wavy decoration-red-400' : 'text-slate-700'}>
