@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -9,12 +9,17 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # Database
-    # Local dev: SQLite (zero setup). Production: Postgres via managed provider
-    # (Neon, Supabase, or Vercel Postgres). Set DATABASE_URL env var accordingly.
     DATABASE_URL: str = Field(
-        default="sqlite+aiosqlite:///./realestate_crm.db",
-        description="Async database connection string (PostgreSQL for production, SQLite for local dev)",
+        default="",
+        description="Async database connection string (PostgreSQL for production)",
     )
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("DATABASE_URL is not set")
+        return v
 
     # Auth (placeholder for future JWT implementation)
     SECRET_KEY: str = Field(

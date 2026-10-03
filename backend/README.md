@@ -86,3 +86,19 @@ curl -H "X-Mock-Role: SUPER_ADMIN" http://localhost:8000/api/auth/me
 # Test 403:
 curl -H "X-Mock-Role: AGENT" http://localhost:8000/api/auth/admin-only
 ```
+
+---
+
+## Before every push
+
+Run the import and syntax guard script before pushing to prevent deployment crashes (especially on Python 3.12 serverless environments):
+
+```bash
+./scripts/check_import.sh
+```
+
+This verifies:
+1. `api.index` imports successfully with all dependencies and schemas.
+2. All files in `app/` and `api/` compile cleanly (`python -m compileall`).
+3. No undefined symbols or missing imports exist (`pyflakes`).
+
