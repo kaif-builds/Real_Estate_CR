@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, UserRole, require_roles
@@ -248,39 +249,64 @@ async def run_matching_engine(
     scored.sort(key=lambda x: x[1], reverse=True)
 
     # Delete existing SUGGESTED matches for this requirement (don't touch user-modified ones)
-    existing = await db.execute(
+    existing_suggested = await db.execute(
         select(Match)
         .where(Match.requirement_id == requirement_id, Match.status == "SUGGESTED")
     )
-    for (old_match,) in existing:
+    for (old_match,) in existing_suggested:
         await db.delete(old_match)
 
-    # Persist new matches
+    # Load existing non-SUGGESTED matches for this requirement to prevent duplicates
+    existing_non_suggested = await db.execute(
+        select(Match)
+        .where(Match.requirement_id == requirement_id, Match.status != "SUGGESTED")
+    )
+    existing_by_prop_id: dict[str, Match] = {
+        m.property_id: m for (m,) in existing_non_suggested
+    }
+
+    # Persist new matches or refresh existing non-SUGGESTED matches
     now = datetime.now(timezone.utc)
     new_matches: list[dict] = []
 
     for prop, score, breakdown in scored:
         tier = _tier_for_score(score)
-        match_id = f"M-{uuid.uuid4().hex[:6].upper()}"
 
-        match = Match(
-            id=match_id,
-            requirement_id=requirement_id,
-            property_id=prop.id,
-            overall_score=score,
-            tier=_to_enum(MatchTier, tier),
-            status=MatchStatus.SUGGESTED,
-            match_factors={
-                "client_name": req.client_name,
-                "short_loc": prop.short_loc,
-                "property_category": _enum_val(prop.category),
-                "property_price": prop.price,
-                "score_breakdown": breakdown,
-            },
-            created_at=now,
-        )
-        db.add(match)
-        new_matches.append(_match_dict(match))
+        if prop.id in existing_by_prop_id:
+            # Refresh existing non-SUGGESTED match (update score, tier, breakdown; preserve status & user notes)
+            existing_match = existing_by_prop_id[prop.id]
+            existing_match.overall_score = score
+            existing_match.tier = _to_enum(MatchTier, tier)
+            factors = dict(existing_match.match_factors or {})
+            factors["client_name"] = req.client_name
+            factors["short_loc"] = prop.short_loc
+            factors["property_category"] = _enum_val(prop.category)
+            factors["property_price"] = prop.price
+            factors["score_breakdown"] = breakdown
+            existing_match.match_factors = factors
+            flag_modified(existing_match, "match_factors")
+            new_matches.append(_match_dict(existing_match))
+        else:
+            # Insert new SUGGESTED match
+            match_id = f"M-{uuid.uuid4().hex[:6].upper()}"
+            match = Match(
+                id=match_id,
+                requirement_id=requirement_id,
+                property_id=prop.id,
+                overall_score=score,
+                tier=_to_enum(MatchTier, tier),
+                status=MatchStatus.SUGGESTED,
+                match_factors={
+                    "client_name": req.client_name,
+                    "short_loc": prop.short_loc,
+                    "property_category": _enum_val(prop.category),
+                    "property_price": prop.price,
+                    "score_breakdown": breakdown,
+                },
+                created_at=now,
+            )
+            db.add(match)
+            new_matches.append(_match_dict(match))
 
     await db.flush()
 
