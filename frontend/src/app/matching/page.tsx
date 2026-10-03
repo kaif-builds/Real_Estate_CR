@@ -28,13 +28,30 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  formatPrice, formatBudget, formatCategory, tierClasses, statusClasses,
+  formatPrice, formatBudget, formatCategory, tierClasses, statusClasses, propertyStatusClasses,
 } from '@/lib/formatters'
 import { apiClient } from '@/lib/apiClient'
 import {
   MOCK_VISITS, MOCK_USERS,
-  type FullRequirementRow, type MatchRow, type VisitRow,
+  type FullRequirementRow, type VisitRow,
 } from '@/lib/mockData'
+
+export interface MatchRow {
+  id: string
+  requirement_id: string
+  client_name?: string | null
+  property_id: string
+  short_loc?: string | null
+  property_category?: string | null
+  property_price?: number | null
+  score: number
+  tier: string
+  status: string
+  reject_reason?: string | null
+  score_breakdown?: Record<string, string> | null
+  property_status?: string | null
+  property_unavailable?: boolean
+}
 
 const CATEGORIES = ['', 'RENTAL_RESIDENTIAL', 'RENTAL_COMMERCIAL', 'BUY_SELL_FLAT', 'BUY_SELL_COMMERCIAL', 'PLOT'] as const
 
@@ -388,7 +405,8 @@ function MatchingContent() {
     const isShortlisted = match.status === 'SHORTLISTED'
     const isShared = match.status === 'SHARED'
     const isVisitScheduled = match.status === 'VISIT_SCHEDULED'
-    return { isRejected, isShortlisted, isShared, isVisitScheduled }
+    const isUnavailable = match.property_unavailable === true
+    return { isRejected, isShortlisted, isShared, isVisitScheduled, isUnavailable }
   }
 
   return (
@@ -590,7 +608,7 @@ function MatchingContent() {
                   ) : displayedMatches.length > 0 ? (
                     <div className="space-y-3">
                       {displayedMatches.map(match => {
-                        const { isRejected, isShortlisted, isShared, isVisitScheduled } = getActionState(match)
+                        const { isRejected, isShortlisted, isShared, isVisitScheduled, isUnavailable } = getActionState(match)
 
                         return (
                           <Card
@@ -615,18 +633,23 @@ function MatchingContent() {
                                     <div className="flex items-center gap-2">
                                       <span className="font-mono text-xs font-semibold text-slate-600">{match.property_id}</span>
                                       <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-700">
-                                        {formatCategory(match.property_category)}
+                                        {formatCategory(match.property_category || '')}
                                       </Badge>
                                     </div>
                                     <p className={`font-semibold mt-0.5 ${isRejected ? 'text-slate-500 line-through' : 'text-slate-900'}`}>
-                                      {match.short_loc}
+                                      {match.short_loc || match.property_id}
                                     </p>
                                     <p className="text-sm text-slate-600 font-medium mt-0.5">
-                                      {formatPrice(match.property_price, match.property_category)}
+                                      {match.property_price != null ? formatPrice(match.property_price, match.property_category || undefined) : '—'}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                  {match.property_status && (
+                                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${propertyStatusClasses(match.property_status)}`}>
+                                      {match.property_status.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
                                   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${tierClasses(match.tier)}`}>
                                     {match.tier}
                                   </span>
@@ -635,6 +658,19 @@ function MatchingContent() {
                                   </span>
                                 </div>
                               </div>
+
+                              {/* Property unavailable red alert label */}
+                              {match.property_unavailable && (
+                                <div className="mt-2 flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 border border-red-300">
+                                    <AlertTriangle size={13} className="shrink-0 text-red-600" />
+                                    No longer available
+                                  </span>
+                                  <span className="text-xs text-red-600 font-medium">
+                                    (Property status is {match.property_status ? match.property_status.replace(/_/g, ' ') : 'unavailable'})
+                                  </span>
+                                </div>
+                              )}
 
                               {/* Reject reason tag */}
                               {isRejected && match.reject_reason && (
@@ -674,16 +710,19 @@ function MatchingContent() {
                               )}
 
                               {/* Action buttons */}
-                              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
+                              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100 items-center">
                                 {/* Shortlist */}
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  disabled={isRejected || isShortlisted}
+                                  disabled={isRejected || isShortlisted || isUnavailable}
                                   onClick={() => handleShortlist(match.id)}
+                                  title={isUnavailable ? 'Property is no longer available' : undefined}
                                   className={
                                     isShortlisted
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200 cursor-default font-medium'
+                                      : isUnavailable
+                                      ? 'opacity-50 cursor-not-allowed text-slate-400 border-slate-200'
                                       : 'hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
                                   }
                                 >
@@ -717,11 +756,14 @@ function MatchingContent() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  disabled={isRejected}
+                                  disabled={isRejected || isUnavailable}
                                   onClick={() => handleShare(match.id)}
+                                  title={isUnavailable ? 'Property is no longer available' : undefined}
                                   className={
                                     isShared
                                       ? 'bg-blue-50 text-blue-700 border-blue-200 font-medium'
+                                      : isUnavailable
+                                      ? 'opacity-50 cursor-not-allowed text-slate-400 border-slate-200'
                                       : 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
                                   }
                                 >
@@ -736,11 +778,14 @@ function MatchingContent() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  disabled={isRejected}
+                                  disabled={isRejected || isUnavailable}
                                   onClick={() => openScheduleVisit(match)}
+                                  title={isUnavailable ? 'Property is no longer available' : undefined}
                                   className={
                                     isVisitScheduled
                                       ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-medium'
+                                      : isUnavailable
+                                      ? 'opacity-50 cursor-not-allowed text-slate-400 border-slate-200'
                                       : 'hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200'
                                   }
                                 >
@@ -750,6 +795,12 @@ function MatchingContent() {
                                     <><CalendarPlus size={13} className="mr-1" /> Schedule Visit</>
                                   )}
                                 </Button>
+
+                                {isUnavailable && (
+                                  <span className="text-xs text-red-600 font-medium ml-auto">
+                                    Actions disabled: property is no longer available
+                                  </span>
+                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -906,7 +957,7 @@ function MatchingContent() {
                 </div>
                 <div>
                   <span className="text-indigo-500 font-medium">Price</span>
-                  <p className="font-semibold text-indigo-900">{formatPrice(schedulingMatch.property_price, schedulingMatch.property_category)}</p>
+                  <p className="font-semibold text-indigo-900">{schedulingMatch.property_price != null ? formatPrice(schedulingMatch.property_price, schedulingMatch.property_category || undefined) : '—'}</p>
                 </div>
                 <div>
                   <span className="text-indigo-500 font-medium">Match Score</span>

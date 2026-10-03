@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, UserRole, require_roles
 from app.core.database import get_db
+from app.core.staleness import TERMINAL_PROPERTY_STATUSES
 from app.models.match import Match
 from app.models.property import Property
 from app.models.requirement import Requirement
@@ -68,10 +69,15 @@ def _enum_val(v) -> str | None:
     return v.value if hasattr(v, "value") else str(v)
 
 
-def _match_dict(m: Match) -> dict:
+def _match_dict(m: Match, prop_status: Any = None) -> dict:
     """Convert Match ORM → dict matching frontend MatchRow."""
-    # match_factors JSON stores the score_breakdown + denormalized fields
     factors = m.match_factors or {}
+    status_str = _enum_val(prop_status)
+    if status_str is None:
+        is_unavailable = True
+    else:
+        is_unavailable = status_str in TERMINAL_PROPERTY_STATUSES
+
     return {
         "id": m.id,
         "requirement_id": m.requirement_id,
@@ -84,6 +90,8 @@ def _match_dict(m: Match) -> dict:
         "tier": _enum_val(m.tier),
         "status": _enum_val(m.status),
         "score_breakdown": factors.get("score_breakdown"),
+        "property_status": status_str,
+        "property_unavailable": is_unavailable,
     }
 
 
@@ -199,13 +207,14 @@ async def list_matches(
     total = (await db.execute(count_q)).scalar_one()
 
     rows = await db.execute(
-        select(Match)
+        select(Match, Property.status)
+        .outerjoin(Property, Match.property_id == Property.id)
         .where(*conds)
         .order_by(Match.overall_score.desc().nullslast())
         .limit(limit).offset(offset)
     )
 
-    items = [_match_dict(m) for (m,) in rows]
+    items = [_match_dict(m, prop_status) for m, prop_status in rows]
     return {"items": items, "total": total}
 
 
@@ -285,7 +294,7 @@ async def run_matching_engine(
             factors["score_breakdown"] = breakdown
             existing_match.match_factors = factors
             flag_modified(existing_match, "match_factors")
-            new_matches.append(_match_dict(existing_match))
+            new_matches.append(_match_dict(existing_match, prop.status))
         else:
             # Insert new SUGGESTED match
             match_id = f"M-{uuid.uuid4().hex[:6].upper()}"
@@ -306,7 +315,7 @@ async def run_matching_engine(
                 created_at=now,
             )
             db.add(match)
-            new_matches.append(_match_dict(match))
+            new_matches.append(_match_dict(match, prop.status))
 
     await db.flush()
 

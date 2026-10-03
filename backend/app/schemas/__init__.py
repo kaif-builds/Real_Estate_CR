@@ -303,6 +303,8 @@ class MatchResponse(BaseModel):
     tier: str
     status: str
     score_breakdown: Optional[dict[str, str]] = None
+    property_status: Optional[str] = None
+    property_unavailable: bool = False
 
 
 class MatchRunResponse(BaseModel):
