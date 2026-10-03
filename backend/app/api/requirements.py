@@ -263,7 +263,9 @@ async def create_requirement(
         if not user_row:
             raise HTTPException(404, f"User '{body.assigned_to_id}' not found")
         if _enum_val(user_row.role) != "AGENT":
-            raise HTTPException(422, "Assigned staff must have the AGENT role")
+            raise HTTPException(422, f"Assigned staff must have the AGENT role. User '{user_row.name}' has role '{_enum_val(user_row.role)}'.")
+        if user_row.status != "Active":
+            raise HTTPException(422, f"Cannot assign to an inactive user. User '{user_row.name}' is inactive.")
         assigned_name = user_row.name
 
     now = datetime.now(timezone.utc)
@@ -329,7 +331,9 @@ async def patch_requirement(
             if not user_row:
                 raise HTTPException(404, f"User '{new_uid}' not found")
             if _enum_val(user_row.role) != "AGENT":
-                raise HTTPException(422, "Assigned staff must have the AGENT role")
+                raise HTTPException(422, f"Assigned staff must have the AGENT role. User '{user_row.name}' has role '{_enum_val(user_row.role)}'.")
+            if user_row.status != "Active":
+                raise HTTPException(422, f"Cannot assign to an inactive user. User '{user_row.name}' is inactive.")
             req.assigned_to_id = user_row.id
             req.assigned_to_name = user_row.name
         else:

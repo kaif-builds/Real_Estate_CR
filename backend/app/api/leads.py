@@ -302,7 +302,7 @@ async def create_lead(
     if not party:
         raise HTTPException(404, f"Party '{body.party_id}' not found")
 
-    # If assigned_to_id provided, must exist AND must have AGENT role
+    # If assigned_to_id provided, must exist AND must have AGENT role AND must be active
     assigned_name = None
     if body.assigned_to_id:
         u = (await db.execute(select(User).where(User.id == body.assigned_to_id))).scalar_one_or_none()
@@ -313,6 +313,11 @@ async def create_lead(
             raise HTTPException(
                 status_code=422,
                 detail=f"Lead can only be assigned to a user with the AGENT role. User '{u.name}' has role '{u_role}'.",
+            )
+        if u.status != "Active":
+            raise HTTPException(
+                status_code=422,
+                detail=f"Cannot assign to an inactive user. User '{u.name}' is inactive.",
             )
         assigned_name = u.name
 
@@ -388,7 +393,7 @@ async def patch_lead(
             lead.party_id = p.id
             lead.party_name = p.name
 
-    # If assigned_to_id is changing, validate AGENT role and resolve name
+    # If assigned_to_id is changing, validate AGENT role, active status, and resolve name
     if "assigned_to_id" in updates:
         new_uid = updates["assigned_to_id"]
         if new_uid:
@@ -400,6 +405,11 @@ async def patch_lead(
                 raise HTTPException(
                     status_code=422,
                     detail=f"Lead can only be assigned to a user with the AGENT role. User '{u.name}' has role '{u_role}'.",
+                )
+            if u.status != "Active":
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Cannot assign to an inactive user. User '{u.name}' is inactive.",
                 )
             lead.assigned_to_id = u.id
             lead.assigned_to_name = u.name

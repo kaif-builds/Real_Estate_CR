@@ -310,3 +310,116 @@ class MatchResponse(BaseModel):
 class MatchRunResponse(BaseModel):
     matches: list[MatchResponse]
     summary: str
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# USER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+VALID_USER_ROLES = {"SUPER_ADMIN", "OFFICE_EXECUTIVE", "AGENT", "CLIENT"}
+VALID_USER_STATUSES = {"Active", "Inactive"}
+
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    role: str
+    status: Optional[str] = "Active"
+    party_id: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Full Name is required")
+        return v.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Email is required")
+        clean = v.strip().lower()
+        if "@" not in clean or "." not in clean:
+            raise ValueError("Invalid email format")
+        return clean
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if not v or v.strip().upper() not in VALID_USER_ROLES:
+            raise ValueError(f"Role must be one of {sorted(VALID_USER_ROLES)}")
+        return v.strip().upper()
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> str:
+        if v is None:
+            return "Active"
+        val = v.strip()
+        if val.capitalize() not in VALID_USER_STATUSES:
+            raise ValueError(f"Status must be one of {sorted(VALID_USER_STATUSES)}")
+        return val.capitalize()
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
+    party_id: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            if not v.strip():
+                raise ValueError("Full Name cannot be empty")
+            return v.strip()
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            clean = v.strip().lower()
+            if not clean:
+                raise ValueError("Email cannot be empty")
+            if "@" not in clean or "." not in clean:
+                raise ValueError("Invalid email format")
+            return clean
+        return v
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            val = v.strip().upper()
+            if val not in VALID_USER_ROLES:
+                raise ValueError(f"Role must be one of {sorted(VALID_USER_ROLES)}")
+            return val
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            val = v.strip().capitalize()
+            if val not in VALID_USER_STATUSES:
+                raise ValueError(f"Status must be one of {sorted(VALID_USER_STATUSES)}")
+            return val
+        return v
+
+
+class UserResponse(BaseModel):
+    """Matches frontend ManagedUser interface exactly."""
+    id: str
+    name: str
+    email: str
+    role: str
+    status: str
+    party_id: Optional[str] = None
+    last_login: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
